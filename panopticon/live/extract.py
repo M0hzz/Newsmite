@@ -172,6 +172,25 @@ def margin_claims(store: Store, subject: str, as_of: str | None = None) -> int:
     return n
 
 
+CAPEX_VERSION = "capex_v2"   # v2: structured unrounded lineage incl. YTD subtraction inputs and year-ago quarter
+
+
+def _flow_ref(v) -> dict:
+    """A quarterly flow with the exact contexts it was built from (for ytd_diff: later minus earlier cumulative)."""
+    ref = _value_ref(v)
+    ref["inputs"] = [{"obs_id": i["obs_id"], "accession": i["accession"], "start": i["start"], "end": i["end"],
+                      "value": i["val"], "class": i.get("class")} for i in v.inputs]
+    if v.method == "ytd_diff":
+        later, earlier = sorted(v.inputs, key=lambda i: i["end"], reverse=True)[:2]
+        ref["derivation"] = {"formula": "later_cumulative - earlier_cumulative",
+                             "later": {"obs_id": later["obs_id"], "start": later["start"], "end": later["end"],
+                                       "value": later["val"]},
+                             "earlier": {"obs_id": earlier["obs_id"], "start": earlier["start"],
+                                         "end": earlier["end"], "value": earlier["val"]},
+                             "result_unrounded": later["val"] - earlier["val"]}
+    return ref
+
+
 def capex_claims(store: Store, subject: str, as_of: str | None = None) -> int:
     cx = {e: v for e, v in periods.quarters(store, "PaymentsToAcquirePropertyPlantAndEquipment", as_of).items()
           if _trusted(v)}
@@ -184,17 +203,27 @@ def capex_claims(store: Store, subject: str, as_of: str | None = None) -> int:
         chg = cur.val / prev.val - 1
         stmt = f"Capex {_b(cur.val)} in quarter ending {cur.end}, {_pct(chg)} QoQ"
         used = [cur, prev]
+        calc = {"version": CAPEX_VERSION, "current": _flow_ref(cur), "prior": _flow_ref(prev),
+                "qoq_change": {"formula": "current / prior - 1", "result_unrounded": chg}, "year_ago": None,
+                "yoy_change": None}
         yago = next((cx[e] for e in ends[:i] if _adjacent(e, cur.end, 350, 380)), None)
         if yago and yago.val:
-            stmt += f", {_pct(cur.val / yago.val - 1)} YoY"
+            yoy = cur.val / yago.val - 1
+            stmt += f", {_pct(yoy)} YoY"
             used.append(yago)
+            calc["year_ago"] = _flow_ref(yago)
+            calc["yoy_change"] = {"formula": "current / year_ago - 1", "result_unrounded": yoy,
+                                  "gap_days": (date.fromisoformat(cur.end) - date.fromisoformat(yago.end)).days}
         if cur.method == "ytd_diff":
             stmt += " (derived from year-to-date cash-flow figures)"
+        if cur.days != 91 or prev.days != 91:
+            stmt += f" (quarters of {cur.days} and {prev.days} days)"
         n += _propose(store, {
-            "claim_id": "cc_" + short_hash(CAPACITY_CAPEX, subject, cur.end, cur.val, prev.val),
+            "claim_id": "cc_" + short_hash(CAPEX_VERSION, subject, cur.end, cur.val, prev.val,
+                                           yago.val if yago else None),
             "family": CAPACITY_CAPEX, "subject": subject, "metric": "capex", "statement": stmt,
             "change": round(chg, 4), "event_time": cur.end, "available_at": max(v.available_at for v in used),
-            "evidence": _value_evidence(store, used)})
+            "evidence": _value_evidence(store, used), "calculation": calc})
     return n
 
 

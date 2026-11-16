@@ -356,6 +356,33 @@ class MarginV2Tests(unittest.TestCase):
             st.close()
 
 
+class CapexV2Tests(unittest.TestCase):
+    def test_capex_claim_lineage_and_checks(self):
+        from panopticon.live.verify import verify_claim
+        with tempfile.TemporaryDirectory() as d:
+            st = Store(d)
+            ingest(st, EdgarClient(transport=FakeSEC()), "XMU", "2026-01-01")
+            # cash-flow capex: Q1 direct, then cumulative 6M / 9M from the fiscal-year start
+            for start, end, val, acc, at in [("2025-08-29", "2025-11-27", 100.0, ACC_Q2, "2026-03-19T22:00:00Z"),
+                                             ("2025-08-29", "2026-02-26", 250.0, ACC_Q2, "2026-03-19T22:00:00Z"),
+                                             ("2025-08-29", "2026-05-28", 450.0, ACC_Q3, "2026-06-24T22:00:00Z")]:
+                st.put_fact("PaymentsToAcquirePropertyPlantAndEquipment", "USD", start, end, val, acc, "10-Q", "Q",
+                            2026, at[:10], at, report_period=end)
+            extract_all(st, "XMU")
+            c = next(x for x in st.claims() if x["family"] == "CAPACITY_CAPEX" and x["event_time"] == "2026-05-28")
+            calc = c["calculation"]
+            self.assertEqual(calc["version"], "capex_v2")
+            self.assertEqual(calc["current"]["value"], 200.0)            # 450 - 250
+            self.assertEqual(calc["current"]["derivation"]["later"]["value"], 450.0)
+            self.assertEqual(calc["current"]["derivation"]["earlier"]["value"], 250.0)
+            self.assertAlmostEqual(calc["qoq_change"]["result_unrounded"], 200 / 150 - 1)
+            v = verify_claim(st, c)
+            for k in ("calculation_reproduces", "inputs_match_recomputation", "no_quarantined_inputs",
+                      "available_at_equals_latest_input"):
+                self.assertTrue(v[k], k)
+            st.close()
+
+
 class LifecycleTests(unittest.TestCase):
     def _claim(self, st, cid, avail, supersedes=None, event="2026-09-03"):
         st.put_candidate({"claim_id": cid, "family": "INVENTORY", "subject": "XMU", "metric": "inventory",

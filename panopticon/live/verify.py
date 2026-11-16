@@ -87,4 +87,31 @@ def verify_claim(store: Store, c: dict) -> dict:
         checks["calculation_reproduces"] = bool(ok)
         checks["identity_checked_both_quarters"] = all(calc[s_]["identity_check"]["checked"]
                                                        for s_ in ("current", "prior"))
+    if c["family"] == "CAPACITY_CAPEX" and calc:
+        from datetime import date
+        ok = True
+
+        def flow_ok(f: dict) -> bool:
+            good = (date.fromisoformat(f["end"]) - date.fromisoformat(f["start"])).days + 1 == f["days"]
+            good &= 84 <= f["days"] <= 100
+            if f["method"] == "ytd_diff":
+                dv = f["derivation"]
+                good &= abs(dv["later"]["value"] - dv["earlier"]["value"] - f["value"]) < 1e-3
+                good &= dv["later"]["start"] == dv["earlier"]["start"]           # same fiscal year ladder
+                good &= date.fromisoformat(dv["earlier"]["end"]).toordinal() + 1 == \
+                    date.fromisoformat(f["start"]).toordinal()                   # quarter starts after earlier cum
+                good &= dv["later"]["end"] == f["end"]
+            good &= f["value"] >= 0
+            return good
+
+        for side in ("current", "prior") + (("year_ago",) if calc.get("year_ago") else ()):
+            ok &= flow_ok(calc[side])
+        ok &= abs(calc["current"]["value"] / calc["prior"]["value"] - 1 - calc["qoq_change"]["result_unrounded"]) < TOL
+        ok &= date.fromisoformat(calc["prior"]["end"]).toordinal() + 1 == \
+            date.fromisoformat(calc["current"]["start"]).toordinal()             # adjacent quarters
+        if calc.get("year_ago"):
+            ok &= abs(calc["current"]["value"] / calc["year_ago"]["value"] - 1
+                      - calc["yoy_change"]["result_unrounded"]) < TOL
+            ok &= 350 <= calc["yoy_change"]["gap_days"] <= 380
+        checks["calculation_reproduces"] = bool(ok)
     return checks

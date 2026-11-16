@@ -95,8 +95,8 @@ class Value:
         return {"concept": self.concept, "unit": self.unit, "start": self.start, "end": self.end,
                 "days": self.days, "value": self.val, "method": self.method, "status": self.status,
                 "reasons": self.reasons, "available_at": self.available_at,
-                "inputs": [{k: i.get(k) for k in ("obs_id", "accession", "start", "end", "val", "frame", "fy",
-                                                   "fp", "form", "filed", "class")} for i in self.inputs]}
+                "inputs": [{k: i.get(k) for k in ("obs_id", "concept", "accession", "start", "end", "val", "frame",
+                                                   "fy", "fp", "form", "filed", "class")} for i in self.inputs]}
 
 
 def _current(store: Store, concept: str, as_of: str | None) -> list[dict]:
@@ -197,13 +197,40 @@ def quarters(store: Store, concept: str, as_of: str | None = None, unit: str = "
 
 
 def revenue_quarters(store: Store, as_of: str | None = None) -> dict[str, Value]:
-    """Per quarter, the first revenue concept with a trusted value. Concepts are never mixed inside a derivation."""
-    out: dict[str, Value] = {}
+    """Composite revenue per quarter across overlapping concepts (concepts are never mixed inside a derivation).
+
+    * only one concept trusted          -> use it
+    * several trusted and they agree    -> the primary (first configured) concept, all kept as lineage
+    * several trusted and they disagree -> the composite quarter is QUARANTINED
+    """
+    per: dict[str, dict[str, Value]] = defaultdict(dict)
     for c in REVENUE_CONCEPTS:
         for e, v in quarters(store, c, as_of).items():
-            if e not in out or (out[e].status != TRUSTED and v.status == TRUSTED):
-                out[e] = v
-    return dict(sorted(out.items()))
+            per[e][c] = v
+    out: dict[str, Value] = {}
+    for e, by_c in sorted(per.items()):
+        trusted = [by_c[c] for c in REVENUE_CONCEPTS if c in by_c and by_c[c].status == TRUSTED]
+        if not trusted:
+            out[e] = next(by_c[c] for c in REVENUE_CONCEPTS if c in by_c)
+            continue
+        primary = trusted[0]
+        if len(trusted) == 1:
+            out[e] = primary
+            continue
+        others = trusted[1:]
+        conflict = [o for o in others if o.start != primary.start or
+                    abs(o.val - primary.val) > AGREE_TOL * max(abs(primary.val), 1)]
+        v = Value(primary.concept, primary.unit, primary.start, e, primary.val, primary.method,
+                  primary.inputs + [i for o in others for i in o.inputs], reasons=list(primary.reasons),
+                  available_at=primary.available_at)
+        if conflict:
+            v.val = None
+            v.quarantine("revenue concepts disagree: " + "; ".join(
+                f"{x.concept} {x.start}..{x.end} = {x.val:,.0f}" for x in [primary] + others))
+        else:
+            v.reasons.append("note: corroborated by " + ", ".join(o.concept for o in others))
+        out[e] = v
+    return out
 
 
 def instants(store: Store, concept: str, as_of: str | None = None, unit: str = "USD") -> dict[str, Value]:
@@ -255,6 +282,10 @@ class QuarterRow:
     dio: float | None = None
     margin_status: str = QUARANTINED
     margin_reasons: list[str] = field(default_factory=list)
+    margin_inputs: list[dict] = field(default_factory=list)
+    margin_formula: str = ""
+    dio_inputs: list[dict] = field(default_factory=list)
+    dio_formula: str = ""
 
 
 def quarter_table(store: Store, as_of: str | None = None) -> list[QuarterRow]:
@@ -266,6 +297,7 @@ def quarter_table(store: Store, as_of: str | None = None) -> list[QuarterRow]:
     for e in sorted(set(rev) | set(gp) | set(inv)):
         r = QuarterRow(e, rev.get(e), gp.get(e), cogs.get(e), inv.get(e), capex.get(e))
         ok = lambda v: v is not None and v.status == TRUSTED  # noqa: E731
+        identity_checked = False
         if not (ok(r.revenue) and ok(r.gross_profit)):
             r.margin_reasons.append("revenue or gross profit missing / quarantined")
         elif r.revenue.start != r.gross_profit.start or r.revenue.end != r.gross_profit.end:
@@ -275,6 +307,7 @@ def quarter_table(store: Store, as_of: str | None = None) -> list[QuarterRow]:
             r.margin_reasons.append("non-positive revenue")
         else:
             if ok(r.cogs) and r.cogs.start == r.revenue.start:
+                identity_checked = True
                 gap = r.revenue.val - r.cogs.val - r.gross_profit.val
                 if abs(gap) > AGREE_TOL * r.revenue.val:
                     r.margin_reasons.append(f"identity violated: revenue - COGS - gross profit = {gap:,.0f}")
@@ -283,7 +316,16 @@ def quarter_table(store: Store, as_of: str | None = None) -> list[QuarterRow]:
             if not any(not x.startswith("note:") for x in r.margin_reasons):
                 r.margin = r.gross_profit.val / r.revenue.val
                 r.margin_status = TRUSTED
+                r.margin_inputs = r.revenue.inputs + r.gross_profit.inputs + (r.cogs.inputs if identity_checked else [])
+                r.margin_formula = (f"Gross margin = gross profit {r.gross_profit.val / 1e6:,.0f} / revenue "
+                                    f"{r.revenue.val / 1e6:,.0f} ($M) = {r.margin:.4%}"
+                                    + (f"; identity checked: {r.revenue.val / 1e6:,.0f} - COGS "
+                                       f"{r.cogs.val / 1e6:,.0f} = {r.gross_profit.val / 1e6:,.0f}"
+                                       if identity_checked else "; identity unchecked"))
         if ok(r.inventory) and ok(r.cogs) and r.cogs.val > 0:
             r.dio = r.inventory.val / r.cogs.val * r.cogs.days
+            r.dio_inputs = r.inventory.inputs + r.cogs.inputs
+            r.dio_formula = (f"DIO = inventory {r.inventory.val / 1e6:,.0f} / quarterly COGS {r.cogs.val / 1e6:,.0f} "
+                             f"x {r.cogs.days} days ({r.cogs.start}..{r.cogs.end}) = {r.dio:.1f} days")
         rows.append(r)
     return rows

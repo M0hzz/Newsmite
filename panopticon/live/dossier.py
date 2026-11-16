@@ -32,11 +32,18 @@ def metrics_table(store: Store, as_of: str, n: int = 6) -> list[str]:
             for i in v.inputs))
         return f"{fmt(v.val)}[^{len(notes)}]"
 
+    def computed(val, formula, inputs) -> str:
+        notes.append(formula + ". Inputs: " + "; ".join(
+            f"{i['concept']} {i['accession']} {i['start'] or 'instant'}..{i['end']} = {i['val']:,.0f} "
+            f"(obs {i['obs_id']})" for i in {i['obs_id']: i for i in inputs}.values()))
+        return f"{val}[^{len(notes)}]"
+
     for r in rows:
         firsts = [v.available_at for v in (r.revenue, r.inventory) if v is not None and v.available_at]
         L.append(f"| {r.end} | {cell(r.revenue, _b)} | "
-                 f"{f'{r.margin:.1%}' if r.margin_status == periods.TRUSTED else 'QUARANTINED'} | "
-                 f"{cell(r.inventory, _b)} | {f'{r.dio:.0f}' if r.dio is not None else '—'} | "
+                 f"{computed(f'{r.margin:.1%}', r.margin_formula, r.margin_inputs) if r.margin_status == periods.TRUSTED else 'QUARANTINED'} | "
+                 f"{cell(r.inventory, _b)} | "
+                 f"{computed(f'{r.dio:.0f}', r.dio_formula, r.dio_inputs) if r.dio is not None else '—'} | "
                  f"{cell(r.capex, _b)} | {min(firsts)[:10] if firsts else '—'} |")
     L += [""] + [f"[^{k}]: {t}" for k, t in enumerate(notes, 1)]
     return L

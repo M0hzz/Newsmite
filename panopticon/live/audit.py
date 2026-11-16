@@ -20,6 +20,16 @@ def _m(x: float | None) -> str:
     return "—" if x is None else f"{x / 1e6:,.0f}M"
 
 
+def _plain(inputs: list[dict]) -> list[dict]:
+    keys = ("obs_id", "concept", "accession", "start", "end", "val", "frame", "fy", "fp", "form", "filed", "class")
+    seen, out = set(), []
+    for i in inputs:
+        if i["obs_id"] not in seen:
+            seen.add(i["obs_id"])
+            out.append({k: i.get(k) for k in keys})
+    return out
+
+
 def audit_rows(store: Store, as_of: str | None = None, ends: list[str] | None = None) -> list[dict]:
     rows = []
     for r in periods.quarter_table(store, as_of):
@@ -34,14 +44,15 @@ def audit_rows(store: Store, as_of: str | None = None, ends: list[str] | None = 
                          "start": v.start, "days": v.days, "inputs": v.to_row()["inputs"], "concept": v.concept,
                          "unit": v.unit})
         rows.append({"metric": "Gross margin", "quarter_end": r.end, "value": r.margin,
-                     "status": r.margin_status, "method": "gross profit / revenue", "reasons": r.margin_reasons,
-                     "start": r.revenue.start if r.revenue else None, "days": None, "inputs": [], "concept": "",
-                     "unit": "ratio"})
+                     "status": r.margin_status, "method": r.margin_formula or "gross profit / revenue",
+                     "reasons": r.margin_reasons, "start": r.revenue.start if r.revenue else None, "days": None,
+                     "inputs": _plain(r.margin_inputs), "concept": "(computed)", "unit": "ratio"})
         rows.append({"metric": "Days of inventory", "quarter_end": r.end, "value": r.dio,
                      "status": periods.TRUSTED if r.dio is not None else periods.QUARANTINED,
-                     "method": "inventory / quarterly COGS x quarter days", "reasons": [] if r.dio is not None else
-                     ["inventory or COGS quarter not trusted"], "start": None, "days": None, "inputs": [],
-                     "concept": "", "unit": "days"})
+                     "method": r.dio_formula or "inventory / quarterly COGS x quarter days",
+                     "reasons": [] if r.dio is not None else ["inventory or COGS quarter not trusted"],
+                     "start": None, "days": None, "inputs": _plain(r.dio_inputs), "concept": "(computed)",
+                     "unit": "days"})
     return rows
 
 
@@ -58,7 +69,7 @@ def render_audit(store: Store, as_of: str | None = None, ends: list[str] | None 
             L.append(base + " " + " | ".join([""] * 14) + " |")
         for k, i in enumerate(row["inputs"]):
             d = None if not i["start"] else periods.days(i)
-            cells = [row["concept"], _m(i["val"]), row["unit"], i["start"] or "(instant)", i["end"], str(d or ""),
+            cells = [i.get("concept") or row["concept"], _m(i["val"]), row["unit"], i["start"] or "(instant)", i["end"], str(d or ""),
                      i["frame"] or "", str(i["fy"] or ""), i["fp"] or "", i["form"] or "", i["filed"] or "",
                      i["accession"], i["class"] or "", i["obs_id"]]
             L.append((base if k == 0 else "| ↳ | | | | |") + " " + " | ".join(cells) + " |")
@@ -67,31 +78,95 @@ def render_audit(store: Store, as_of: str | None = None, ends: list[str] | None 
     return "\n".join(L)
 
 
-def reconcile(store: Store, as_of: str | None = None) -> list[dict]:
-    """For every input fact of every trusted table value, find the number (in $ millions, as filed) in the
-    text of the filing that reported it."""
+LABELS = {
+    "RevenueFromContractWithCustomerExcludingAssessedTax": ("Revenue", "Net sales", "Net revenue"),
+    "Revenues": ("Revenue", "Net sales", "Net revenue"),
+    "GrossProfit": ("Gross margin", "Gross profit"),
+    "CostOfGoodsAndServicesSold": ("Cost of goods sold", "Cost of sales"),
+    "InventoryNet": ("Inventories", "Inventory"),
+    "PaymentsToAcquirePropertyPlantAndEquipment": ("property, plant, and equipment", "property, plant and equipment",
+                                                   "capital expenditures"),
+}
+NEGATIVE_AS_FILED = {"PaymentsToAcquirePropertyPlantAndEquipment"}   # shown in parentheses on the cash-flow statement
+LEVELS = ("STATEMENT_LINE_MATCH", "LINE_ITEM_MATCH", "LABEL_ONLY", "NUMBER_ONLY", "MISSING")
+
+
+def _long_date(iso: str) -> str:
+    from datetime import date
+    d = date.fromisoformat(iso)
+    return f"{d.strftime('%B')} {d.day}, {d.year}"
+
+
+def _grade(text: str, i: dict, label_window: int = 160, header_window: int = 6000) -> tuple[str, str]:
+    """Best evidence level for one fact across all occurrences of its value in the filing text."""
+    needle = f"{abs(i['val']) / 1e6:,.0f}"
+    pat = rf"\({re.escape(needle)}\)" if i["concept"] in NEGATIVE_AS_FILED else \
+        rf"(?<![\d,(]){re.escape(needle)}(?![\d,)])"
+    labels = LABELS.get(i["concept"], ())
+    header = re.compile(r"\s+".join(re.escape(w) for w in _long_date(i["end"]).split()))  # headers wrap lines
+    in_millions = re.search(r"in millions", text, flags=re.I) is not None
+    best, ctx = "MISSING", ""
+    for m in re.finditer(pat, text):
+        before = re.sub(r"\s+", " ", text[max(0, m.start() - label_window): m.start()])
+        has_label = any(lab.lower() in before.lower() for lab in labels)
+        window = text[max(0, m.start() - header_window): m.start()]
+        has_header = header.search(window) is not None
+        # the nearest preceding statement heading must be closer than any section break (e.g. MD&A tables)
+        near = text[max(0, m.start() - 3000): m.start()]
+        titles = re.findall(r"Consolidated (?:Statements? of [A-Z][A-Za-z ,]+?|Balance Sheets?)(?=\n|\()", near)
+        level = ("STATEMENT_LINE_MATCH" if has_label and has_header and in_millions and titles else
+                 "LINE_ITEM_MATCH" if has_label and has_header and in_millions else
+                 "LABEL_ONLY" if has_label else "NUMBER_ONLY")
+        if LEVELS.index(level) < LEVELS.index(best):
+            stmt = f"[{titles[-1].strip()}] " if titles else "[no statement heading nearby] "
+            best, ctx = level, stmt + re.sub(r"\s+", " ", text[max(0, m.start() - 60): m.end() + 10])
+        if best == "STATEMENT_LINE_MATCH":
+            break
+    return best, ctx
+
+
+def source_check(store: Store, as_of: str | None = None) -> list[dict]:
+    """Numeric source-presence check with line-item and period-header proximity.
+
+    For each input fact of each trusted displayed value (including computed metrics), look for the value
+    (in $ millions, as filed) in the text of the filing that reported it, near the expected line-item label
+    and after the period's column-header date. This is a heuristic proximity test, NOT semantic statement
+    reconciliation: statement, column and line placement still need a human read of the filing.
+    """
     texts: dict[str, str | None] = {}
-    out = []
+    out, seen = [], set()
     for row in audit_rows(store, as_of):
-        if row["status"] != periods.TRUSTED or not row["inputs"]:
+        if row["status"] != periods.TRUSTED:
             continue
         for i in row["inputs"]:
+            if (i["obs_id"], row["metric"], row["quarter_end"]) in seen:
+                continue
+            seen.add((i["obs_id"], row["metric"], row["quarter_end"]))
+            def text_of(acc: str) -> str | None:
+                if acc not in texts:
+                    docs = store.iter_rows("SELECT sha256 FROM documents WHERE accession=? AND form IN "
+                                           "('10-Q','10-K','10-Q/A','10-K/A') LIMIT 1", (acc,))
+                    texts[acc] = html_to_text(store.read_raw(docs[0]["sha256"])) if docs else None
+                return texts[acc]
+
             acc = i["accession"]
-            if acc not in texts:
-                docs = store.iter_rows("SELECT sha256 FROM documents WHERE accession=? AND form IN "
-                                       "('10-Q','10-K','10-Q/A','10-K/A') LIMIT 1", (acc,))
-                texts[acc] = html_to_text(store.read_raw(docs[0]["sha256"])) if docs else None
-            t = texts[acc]
-            needle = f"{abs(i['val']) / 1e6:,.0f}"
-            if t is None:
-                found, ctx = None, "source filing outside ingested window"
+            if text_of(acc) is not None:
+                level, ctx = _grade(texts[acc], i)
             else:
-                m = re.search(rf"(?<![\d,]){re.escape(needle)}(?![\d,])", t)
-                found = m is not None
-                ctx = re.sub(r"\s+", " ", t[max(0, m.start() - 70): m.end() + 10]) if m else ""
-            out.append({"metric": row["metric"], "quarter_end": row["quarter_end"], "accession": acc,
-                        "fact": f"{i['start'] or ''}..{i['end']}", "value_millions": needle, "found_in_filing": found,
-                        "context": ctx})
+                # Original filing not ingested: check later filings that repeated the identical fact
+                # (prior-period comparative columns), and say so.
+                level, ctx = "NOT_INGESTED", "source filing outside ingested window"
+                fk = store.iter_rows("SELECT fact_key FROM fact_observations WHERE obs_id=?", (i["obs_id"],))
+                for r in store.iter_rows("SELECT accession FROM fact_observations WHERE fact_key=? AND val=? AND "
+                                         "accession<>? ORDER BY accepted_at", (fk[0][0], i["val"], acc)) if fk else []:
+                    if text_of(r["accession"]) is not None:
+                        lv, cx = _grade(texts[r["accession"]], i)
+                        level, ctx = lv, f"via comparative column in {r['accession']}: {cx}"
+                        acc = r["accession"]
+                        break
+            out.append({"metric": row["metric"], "quarter_end": row["quarter_end"], "concept": i["concept"],
+                        "accession": acc, "fact": f"{i['start'] or 'instant'}..{i['end']}",
+                        "value_millions": f"{abs(i['val']) / 1e6:,.0f}", "level": level, "context": ctx})
     return out
 
 

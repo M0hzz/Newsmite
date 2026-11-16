@@ -238,6 +238,25 @@ class PeriodNormalization(unittest.TestCase):
         self.assertAlmostEqual(im.revenue(Q["25Q3"]), 9301e6)
         self.assertAlmostEqual(im.revenue(Q["26Q3"]), 41456e6)
 
+    def test_conflicting_revenue_concepts_are_quarantined(self):
+        micron_like(self.fx)
+        # Same quarter under the second concept: individually trusted, materially different value.
+        self.fx.fact("Revenues", nxt(Q["26Q2"]), Q["26Q3"], 39e9, "26Q3")
+        im = IMPL(self.fx.store)
+        self.assertIsNone(im.revenue(Q["26Q3"]), "composite revenue must not silently pick one concept")
+        self.assertIsNone(im.margin(Q["26Q3"]))
+        self.assertAlmostEqual(im.revenue(Q["26Q2"]), 23860e6)   # other quarters unaffected
+
+    def test_agreeing_revenue_concepts_keep_both_as_lineage(self):
+        if USE_OLD:
+            self.skipTest("old implementation has no lineage")
+        micron_like(self.fx)
+        self.fx.fact("Revenues", nxt(Q["26Q2"]), Q["26Q3"], 41456e6, "26Q3")
+        v = periods.revenue_quarters(self.fx.store)[Q["26Q3"]]
+        self.assertEqual(v.status, periods.TRUSTED)
+        self.assertEqual(v.concept, "RevenueFromContractWithCustomerExcludingAssessedTax")
+        self.assertIn("Revenues", {i["concept"] for i in v.inputs})
+
     def test_inventory_requires_reporting_date_instant(self):
         micron_like(self.fx)
         self.fx.fact("InventoryNet", None, "2026-04-15", 9.9e9, "26Q3")   # mid-quarter instant
@@ -271,8 +290,36 @@ class PeriodNormalization(unittest.TestCase):
         self.assertEqual(q4.method, "ytd_diff")
         self.assertEqual(sorted(i["end"] for i in q4.inputs), [Q["26Q3"], Q["26Q4"]])
         self.assertTrue(all(i["obs_id"] and i["accession"] for i in q4.inputs))
+        row = {r.end: r for r in periods.quarter_table(self.fx.store)}[Q["26Q3"]]
+        self.assertEqual({i["concept"] for i in row.margin_inputs},
+                         {"RevenueFromContractWithCustomerExcludingAssessedTax", "GrossProfit",
+                          "CostOfGoodsAndServicesSold"})
+        self.assertIn("35,056 / revenue 41,456", row.margin_formula)
+        self.assertEqual({i["concept"] for i in row.dio_inputs}, {"InventoryNet", "CostOfGoodsAndServicesSold"})
+        self.assertIn("x 91 days", row.dio_formula)
         cx = periods.quarters(self.fx.store, "PaymentsToAcquirePropertyPlantAndEquipment")[Q["26Q3"]]
         self.assertEqual({(i["start"], i["end"]) for i in cx.inputs}, {(FY26, Q["26Q3"]), (FY26, Q["26Q2"])})
+
+
+class SourceCheckGrading(unittest.TestCase):
+    def test_levels(self):
+        from panopticon.live.audit import _grade
+        fact = {"val": 41456e6, "concept": "RevenueFromContractWithCustomerExcludingAssessedTax", "end": "2026-05-28"}
+        stmt = ("Consolidated Statements of Operations\n(In millions)\nQuarter Ended\nMay 28,\n2026\n"
+                "Revenue\n$\n41,456 \n")
+        self.assertEqual(_grade(stmt, fact)[0], "STATEMENT_LINE_MATCH")
+        mdna = "Results of Operations\n(In millions)\nMay 28, 2026\nRevenue $ 41,456"
+        self.assertEqual(_grade(mdna, fact)[0], "LINE_ITEM_MATCH")   # right label/date, not on a statement
+        self.assertIn("Consolidated Statements of Operations", _grade(stmt, fact)[1])
+        no_header = "(In millions)\nRevenue\n$\n41,456\n"
+        self.assertEqual(_grade(no_header, fact)[0], "LABEL_ONLY")
+        self.assertEqual(_grade("Backlog grew to 41,456 units", fact)[0], "NUMBER_ONLY")
+        self.assertEqual(_grade("Revenue $ 41,457", fact)[0], "MISSING")
+        capex = {"val": 30712e6, "concept": "PaymentsToAcquirePropertyPlantAndEquipment", "end": "2026-09-03"}
+        cf = "(In millions)\nSeptember 3,\n2026\nExpenditures for property, plant, and equipment\n(30,712)"
+        self.assertEqual(_grade(cf, capex)[0], "LINE_ITEM_MATCH")
+        self.assertEqual(_grade("Consolidated Statements of Cash Flows\n" + cf, capex)[0], "STATEMENT_LINE_MATCH")
+        self.assertEqual(_grade(cf.replace("(30,712)", "30,712"), capex)[0], "MISSING")  # wrong sign as filed
 
 
 if __name__ == "__main__":

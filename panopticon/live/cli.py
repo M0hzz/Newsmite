@@ -91,15 +91,37 @@ def add_parser(sub) -> None:
     rs = rel.add_subparsers(dest="rel_cmd", required=True)
     p = rs.add_parser("list")
     p.add_argument("ticker", nargs="?", default="MU")
-    p = rs.add_parser("verify")
+    p = rs.add_parser("search", help="find candidate passages in ingested filings (regex, case-insensitive)")
+    p.add_argument("pattern")
+    p.add_argument("--forms", default="10-K,10-K/A")
+    p.add_argument("--limit", type=int, default=10)
+    p = rs.add_parser("cite", help="pin an exact passage from an ingested SEC filing to an edge")
+    p.add_argument("edge_id")
+    p.add_argument("--accession", required=True)
+    p.add_argument("--quote", required=True, help="exact text from the filing (whitespace-insensitive)")
+    p.add_argument("--occurrence", type=int)
+    p.add_argument("--ticker", default="MU")
+    p.add_argument("--by", required=True)
+    p = rs.add_parser("verify", help="verify an edge; requires SEC passage references that re-validate")
     p.add_argument("edge_id")
     p.add_argument("--ticker", default="MU")
     p.add_argument("--by", required=True)
-    p.add_argument("--evidence", required=True, help="citation, e.g. '10-K FY2026 Item 1A p.24'")
+    p.add_argument("--note")
     p = rs.add_parser("unverify")
     p.add_argument("edge_id")
     p.add_argument("--ticker", default="MU")
     p.add_argument("--by", required=True)
+    p.add_argument("--note")
+    p = rs.add_parser("show")
+    p.add_argument("edge_id")
+    p.add_argument("--ticker", default="MU")
+    p = rs.add_parser("check", help="re-validate every SEC reference on every edge")
+    p.add_argument("ticker", nargs="?", default="MU")
+    p = rs.add_parser("coverage", help="triage: how often the latest 10-K mentions each edge's counterparty "
+                                       "(mentions are NOT evidence)")
+    p.add_argument("ticker", nargs="?", default="MU")
+    p = rs.add_parser("migrate", help="move free-text citations aside (they are not evidence)")
+    p.add_argument("ticker", nargs="?", default="MU")
 
 
 def review_packet(store: Store, rows: list[dict], args) -> dict:
@@ -241,15 +263,75 @@ def run(args) -> int:
         if not inv.signals:
             print("no packets: packets need approved claims on verified edges", file=sys.stderr)
     elif c == "rel":
-        path = REL_DIR / f"{args.ticker.upper()}.json"
-        if args.rel_cmd == "list":
+        from .livegraph import cite_edge, migrate_relationships, save_relationships
+        from .relevidence import edge_evidence_status, ref_id, search
+        ticker = getattr(args, "ticker", None) or "MU"
+        path = REL_DIR / f"{ticker.upper()}.json"
+        rc = args.rel_cmd
+        if rc == "search":
+            for h in search(store, args.pattern, tuple(args.forms.split(",")), limit=args.limit):
+                out.write(f"{h['accession']}  {h['form']} {h['period']}  @{h['offset']}\n    {h['sentence']}\n")
+        elif rc == "cite":
+            e = cite_edge(path, store, args.edge_id, args.accession, args.quote, args.by, args.occurrence)
+            r = e["sec_evidence"][-1]
+            out.write(f"cited {ref_id(r)} on {e['id']}\n  doc_sha256 {r['doc_sha256']}\n  \"{r['passage']}\"\n")
+        elif rc in ("verify", "unverify"):
+            e = verify_edge(path, store, args.edge_id, args.by, args.note, verified=rc == "verify")
+            out.write(f"{rc} {e['id']}: verified={e['verified']} by {e['verified_by']} "
+                      f"({len(e['sec_evidence'])} SEC reference(s))\n")
+        elif rc == "show":
             rel = load_relationships(path)
+            migrate_relationships(rel)
+            e = next(x for x in rel["edges"] if x["id"] == args.edge_id)
+            ok, problems = edge_evidence_status(store, e)
+            out.write(json.dumps({**e, "evidence_valid_here": ok, "evidence_problems": problems}, indent=1) + "\n")
+        elif rc == "coverage":
+            import re as _re
+            from .relevidence import normalized_text
+            rel = load_relationships(path)
+            migrate_relationships(rel)
+            focal = rel["focal"]
+            tenks = store.documents(form="10-K")
+            if not tenks:
+                out.write("no 10-K ingested\n")
+                return 1
+            k = tenks[-1]
+            t = normalized_text(store, k["sha256"])
+            ents = {e["id"]: e for e in rel["entities"]}
+            out.write(f"latest 10-K {k['accession']} (period {k['period']}); mention counts are triage, not evidence\n")
+            for e in rel["edges"]:
+                other = e["target"] if e["source"] == focal else e["source"]
+                pat = ents[other].get("attrs", {}).get("search_terms")
+                n = len(_re.findall(pat, t, flags=_re.I)) if pat else None
+                hint = ("no mention in focal 10-K: needs another SEC source or should be dropped" if n == 0 else
+                        "" if n else "no search terms")
+                out.write(f"{e['id']}  {'VERIFIED ' if e['verified'] else 'unverified'} refs={len(e['sec_evidence'])}"
+                          f"  {ents[e['source']]['name'][:28]:<28} -{e['relationship']:<13}-> "
+                          f"{ents[e['target']]['name'][:30]:<30} mentions={n}  {hint}\n")
+        elif rc == "migrate":
+            rel = load_relationships(path)
+            changed = migrate_relationships(rel)
+            save_relationships(path, rel)
+            out.write(f"migrated {path.name}: {'changed' if changed else 'already current'}\n")
+        elif rc == "check":
+            rel = load_relationships(path)
+            migrate_relationships(rel)
+            bad = 0
+            for e in rel["edges"]:
+                if not e["sec_evidence"] and not e["verified"]:
+                    continue
+                ok, problems = edge_evidence_status(store, e)
+                bad += (not ok) and e["verified"]
+                out.write(f"{'OK  ' if ok else 'FAIL'} {e['id']} verified={e['verified']} refs={len(e['sec_evidence'])}"
+                          + (f"  {'; '.join(problems)}" if problems else "") + "\n")
+            out.write(f"-- {sum(e['verified'] for e in rel['edges'])} verified edge(s); {bad} with invalid evidence\n")
+            return 1 if bad else 0
+        else:  # list
+            rel = load_relationships(path)
+            migrate_relationships(rel)
             names = {e["id"]: e["name"] for e in rel["entities"]}
             for e in rel["edges"]:
-                out.write(f"{e['id']}  {'VERIFIED  ' if e['verified'] else 'unverified'}  {names[e['source']]} "
-                          f"-{e['relationship']}-> {names[e['target']]}  s={e['strength']}  {e.get('notes', '')}\n")
-        else:
-            e = verify_edge(path, args.edge_id, args.by, getattr(args, "evidence", ""),
-                            verified=args.rel_cmd == "verify")
-            out.write(json.dumps(e, indent=1) + "\n")
+                out.write(f"{e['id']}  {'VERIFIED  ' if e['verified'] else 'unverified'}  refs={len(e['sec_evidence'])}  "
+                          f"{names[e['source']]} -{e['relationship']}-> {names[e['target']]}  s={e['strength']}  "
+                          f"{e.get('notes', '')}\n")
     return 0

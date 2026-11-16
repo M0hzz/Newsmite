@@ -102,7 +102,10 @@ python3 -m panopticon live show <claim_id>                # full evidence trail 
 python3 -m panopticon live approve <claim_id> --by "Your Name" --note "checked against 10-Q"
 python3 -m panopticon live reject  <claim_id> --by "Your Name" --note "wrong comparison period"
 python3 -m panopticon live rel list                       # draft relationship map (all unverified)
-python3 -m panopticon live rel verify mu_e000 --by "Your Name" --evidence "10-K FY2026 Item 1A, p.NN"
+python3 -m panopticon live rel search "facilities located in Taiwan"       # find candidate passages
+python3 -m panopticon live rel cite mu_e027 --accession 0000723125-26-000023 --by "Your Name" \
+    --quote "We manufacture our products within our own facilities located in Taiwan, ..."
+python3 -m panopticon live rel verify mu_e027 --by "Your Name" --note "why the passage supports the edge"
 python3 -m panopticon live dossier MU > MU_dossier.md
 python3 -m panopticon live signals MU                     # empty until approved claims sit on verified edges
 ```
@@ -139,3 +142,9 @@ python3 -m panopticon live source-check MU --periods 2026-05-28                 
 If the original filing predates the ingest window, the check falls back to a later filing that repeats the fact as a comparative column, and says so. Confirming the exact column and line placement is still a manual step: open the filing links from the audit.
 
 `tests/test_periods.py` holds the regression fixtures. Run with `PANOPTICON_OLD_QUARTERS=1` to execute them against the pre-fix implementation loaded from `main`.
+
+### Relationship evidence: immutable SEC references only
+
+An edge can only be verified by pinning an exact passage from an ingested SEC filing (`live rel cite`). Each reference records the accession, form, acceptance time, URL, the **sha256 of the filing's raw bytes**, the extractor version, the passage's offset in the normalized text, and the **sha256 of the passage**. `live rel verify` refuses an edge until it has at least one reference that re-validates against the stored filing. Free-text citations ("10-K p.24") aren't evidence: `live rel migrate` moves them to `legacy_citations` and un-verifies any edge that relied on them.
+
+The graph never trusts the `verified` flag by itself. At build time every reference is re-derived from the stored bytes. An edge counts as verified only if all its references re-validate **and** every cited filing was public by the replay time, so relationship evidence can't leak future information into a backtest. `live rel check` re-validates every edge, and `live rel coverage` triages which draft edges the latest 10-K even mentions (a mention is not evidence).

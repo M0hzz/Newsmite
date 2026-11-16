@@ -111,7 +111,7 @@ def render(store: Store, relationships: dict, ticker: str, as_of: str) -> str:
     for e in edges:
         L.append(f"| `{e['id']}` {names[e['source']]} → {names[e['target']]} | {e['relationship']} | "
                  f"{e['strength']:.2f} | {'verified by ' + e['verified_by'] if e['verified'] else 'unverified draft'} | "
-                 f"{'; '.join(e.get('evidence', [])) or '—'} |")
+                 f"{'; '.join(r['accession'] + '@' + str(r['text_offset']) for r in e.get('sec_evidence', [])) or '—'} |")
     L.append("")
 
     g = build(store, relationships, as_of)

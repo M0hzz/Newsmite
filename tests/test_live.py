@@ -11,7 +11,7 @@ from panopticon.investigations import Investigation
 from panopticon.live import edgar
 from panopticon.live.edgar import EdgarClient, ingest, parse_form4
 from panopticon.live.extract import extract_all
-from panopticon.live.livegraph import build, verify_edge
+from panopticon.live.livegraph import build, cite_edge, verify_edge
 from panopticon.live.store import Store, sha256
 
 CIK = "0000999999"
@@ -267,13 +267,78 @@ class LiveAcceptance(unittest.TestCase):
         as_of = "2026-11-10T00:00:00Z"
         g = build(self.store, REL, as_of)
         self.assertEqual(Investigation(g, "XMU", date(2026, 11, 10)).signals, [])
+        self.run_pipeline()   # ingest the filings that relationship evidence must come from
         rel_path = Path(self.tmp.name) / "rel.json"
         rel_path.write_text(json.dumps(REL))
         with self.assertRaises(ValueError):
-            verify_edge(rel_path, "e1", "tester", "")          # verification needs a citation
-        verify_edge(rel_path, "e1", "tester", "10-K FY2026 Item 1A")
+            verify_edge(rel_path, self.store, "e1", "tester")   # no SEC evidence yet -> refused
+        cite_edge(rel_path, self.store, "e1", ACC_K, "facilities located in Taiwan, Singapore and Japan", "tester")
+        verify_edge(rel_path, self.store, "e1", "tester", "edge supported by 10-K passage")
         g2 = build(self.store, json.loads(rel_path.read_text()), as_of)
         self.assertTrue(Investigation(g2, "XMU", date(2026, 11, 10)).signals)
+        # evidence filed after as_of cannot verify an edge for that replay (no look-ahead)
+        g3 = build(self.store, json.loads(rel_path.read_text()), "2026-10-01T00:00:00Z")
+        self.assertFalse(any(e.verified for e in g3.edges))
+
+
+class RelationshipEvidenceTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.store = Store(self.tmp.name)
+        ingest(self.store, EdgarClient(transport=FakeSEC()), "XMU", "2026-01-01")
+        self.path = Path(self.tmp.name) / "rel.json"
+        self.path.write_text(json.dumps(REL))
+
+    def tearDown(self):
+        self.store.close()
+        self.tmp.cleanup()
+
+    def test_ref_pins_bytes_passage_and_offset(self):
+        from panopticon.live.relevidence import validate_ref
+        e = cite_edge(self.path, self.store, "e1", ACC_K, "subject to export control regulations administered by "
+                      "the Bureau of Industry and Security", "tester")
+        r = e["sec_evidence"][0]
+        self.assertEqual(r["accession"], ACC_K)
+        self.assertEqual(r["doc_sha256"], self.store.documents(form="10-K")[0]["sha256"])
+        self.assertEqual(validate_ref(self.store, r), (True, "ok"))
+        for field, bad, why in [("doc_sha256", "0" * 64, "bytes differ"), ("text_offset", 3, "offset"),
+                                ("passage", r["passage"] + " extra", "hash"),
+                                ("extractor", "other/v9", "extractor")]:
+            ok, msg = validate_ref(self.store, {**r, field: bad})
+            self.assertFalse(ok, field)
+            self.assertIn(why, msg)
+
+    def test_quote_must_exist_and_be_unambiguous(self):
+        with self.assertRaises(ValueError):
+            cite_edge(self.path, self.store, "e1", ACC_K, "this sentence is not anywhere in the filing text", "t")
+        with self.assertRaises(ValueError):
+            cite_edge(self.path, self.store, "e1", ACC_K, "Taiwan", "t")       # too short to be evidence
+        with self.assertRaises(KeyError):
+            cite_edge(self.path, self.store, "e1", "0000000000-00-000000",
+                      "facilities located in Taiwan, Singapore and Japan", "t")  # filing not ingested
+
+    def test_hidden_xbrl_header_text_is_not_citable(self):
+        with self.assertRaises(ValueError):
+            cite_edge(self.path, self.store, "e1", ACC_K, "hidden xbrl header Taiwan and some more words", "t")
+
+    def test_free_text_citations_are_migrated_and_unverified(self):
+        from panopticon.live.livegraph import migrate_relationships
+        data = json.loads(json.dumps(REL))
+        data["edges"][0].update(verified=True, verified_by="x", evidence=["10-K FY2026 Item 1A p.24"])
+        self.assertTrue(migrate_relationships(data))
+        e = data["edges"][0]
+        self.assertFalse(e["verified"])
+        self.assertEqual(e["legacy_citations"], ["10-K FY2026 Item 1A p.24"])
+        self.assertNotIn("evidence", e)
+        self.assertEqual(e["sec_evidence"], [])
+
+    def test_graph_ignores_verified_flag_when_evidence_does_not_revalidate(self):
+        cite_edge(self.path, self.store, "e1", ACC_K, "facilities located in Taiwan, Singapore and Japan", "t")
+        verify_edge(self.path, self.store, "e1", "t")
+        data = json.loads(self.path.read_text())
+        self.assertTrue(build(self.store, data, "2026-12-31T00:00:00Z").edges[0].verified)
+        data["edges"][0]["sec_evidence"][0]["passage_sha256"] = "f" * 64          # tampered file
+        self.assertFalse(build(self.store, data, "2026-12-31T00:00:00Z").edges[0].verified)
 
 
 class ReviewExportTests(unittest.TestCase):

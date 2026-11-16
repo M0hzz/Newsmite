@@ -25,18 +25,76 @@ def save_relationships(path: str | Path, data: dict) -> None:
     Path(path).write_text(json.dumps(data, indent=1) + "\n")
 
 
-def verify_edge(path: str | Path, edge_id: str, reviewer: str, evidence: str, verified: bool = True) -> dict:
-    if not reviewer or (verified and not evidence):
-        raise ValueError("verifying an edge requires a reviewer and a citation (e.g. '10-K FY2026 Item 1A, p.24')")
-    data = load_relationships(path)
+def _now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _edge(data: dict, edge_id: str) -> dict:
     edge = next((e for e in data["edges"] if e["id"] == edge_id), None)
     if edge is None:
         raise KeyError(edge_id)
+    return edge
+
+
+def migrate_relationships(data: dict) -> bool:
+    """Free-text citations are not evidence: move them aside and un-verify anything that relied on them."""
+    changed = False
+    for e in data["edges"]:
+        legacy = e.pop("evidence", None)
+        if legacy:
+            e.setdefault("legacy_citations", []).extend(legacy)
+            changed = True
+        elif legacy is not None:
+            changed = True
+        e.setdefault("sec_evidence", [])
+        e.setdefault("history", [])
+        if e.get("verified") and not e["sec_evidence"]:
+            e.update(verified=False, verified_by=None, verified_at=None)
+            e["history"].append({"at": _now(), "action": "unverified", "by": "migration",
+                                 "note": "free-text citation is not SEC evidence"})
+            changed = True
+    data["evidence_policy"] = ("Edges are verified only by immutable SEC passage references (accession, document "
+                               "sha256, exact passage, offset, passage sha256). Free-text citations are ignored.")
+    return changed
+
+
+def cite_edge(path: str | Path, store: Store, edge_id: str, accession: str, quote: str, by: str,
+              occurrence: int | None = None) -> dict:
+    from .relevidence import make_ref, ref_id
+    if not by:
+        raise ValueError("a reviewer name is required")
+    data = load_relationships(path)
+    migrate_relationships(data)
+    edge = _edge(data, edge_id)
+    ref = make_ref(store, accession, quote, occurrence)
+    if any(r["passage_sha256"] == ref["passage_sha256"] and r["accession"] == ref["accession"]
+           for r in edge["sec_evidence"]):
+        raise ValueError("this passage is already cited on this edge")
+    ref["cited_by"] = by
+    edge["sec_evidence"].append(ref)
+    edge["history"].append({"at": _now(), "action": "cited", "by": by, "note": ref_id(ref)})
+    save_relationships(path, data)
+    return edge
+
+
+def verify_edge(path: str | Path, store: Store, edge_id: str, reviewer: str, note: str | None = None,
+                verified: bool = True) -> dict:
+    """Verify requires >= 1 SEC passage reference, every one of which re-validates against the stored filing."""
+    from .relevidence import edge_evidence_status
+    if not reviewer:
+        raise ValueError("a reviewer name is required")
+    data = load_relationships(path)
+    migrate_relationships(data)
+    edge = _edge(data, edge_id)
+    if verified:
+        ok, problems = edge_evidence_status(store, edge)
+        if not ok:
+            raise ValueError("cannot verify: " + "; ".join(problems))
     edge["verified"] = verified
     edge["verified_by"] = reviewer if verified else None
-    edge["verified_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if verified else None
-    if evidence:
-        edge.setdefault("evidence", []).append(evidence)
+    edge["verified_at"] = _now() if verified else None
+    edge["history"].append({"at": _now(), "action": "verified" if verified else "unverified", "by": reviewer,
+                            "note": note})
     save_relationships(path, data)
     return edge
 
@@ -52,15 +110,23 @@ def build(store: Store, relationships: dict, as_of: str) -> PowerGraph:
     for e in relationships["entities"]:
         g.add_entity(Entity(e["id"], e["name"], NodeType(e["type"]), {**e.get("attrs", {}),
                                                                       "provenance": "live: SEC EDGAR + draft map"}))
+    from .relevidence import edge_evidence_status, ref_id
+    relationships = json.loads(json.dumps(relationships))
+    migrate_relationships(relationships)
     for e in relationships["edges"]:
+        # An edge counts as verified only if its SEC references re-validate against the stored filings
+        # *and* every cited filing was public by as_of (no look-ahead through relationship evidence).
+        evidence_ok = edge_evidence_status(store, e)[0] if e.get("verified") else False
+        public = all(r["accepted_at"] <= as_of for r in e["sec_evidence"])
         g.add_edge(Edge(
             e["source"], EdgeType(e["relationship"]), e["target"],
             effective_from=date.fromisoformat(e["effective_from"]), effective_to=None,
             strength=e["strength"], direction=e["direction"], confidence=e["confidence"],
-            evidence_ids=list(e.get("evidence", [])) or [f"draft:{e['id']}"],
+            evidence_ids=[ref_id(r) for r in e["sec_evidence"]] or [f"draft:{e['id']}"],
             last_verified=date.fromisoformat((e.get("verified_at") or e["recorded_at"])[:10]),
             lag_days=e["lag_days"], affected_metrics=e["metrics"], clock=Clock(e["clock"]),
-            recorded_at=date.fromisoformat(e["recorded_at"]), verified=bool(e.get("verified")),
+            recorded_at=date.fromisoformat(e["recorded_at"]),
+            verified=bool(e.get("verified")) and evidence_ok and public,
             verified_by=e.get("verified_by")))
     for c in store.active_claims(as_of):
         ev_ids = []

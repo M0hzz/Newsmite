@@ -17,7 +17,8 @@
    "name": "Samsung Electronics (memory)",
    "type": "Competitor",
    "attrs": {
-    "listing": "005930.KS"
+    "listing": "005930.KS",
+    "search_terms": "Samsung"
    }
   },
   {
@@ -25,7 +26,8 @@
    "name": "SK hynix",
    "type": "Competitor",
    "attrs": {
-    "listing": "000660.KS"
+    "listing": "000660.KS",
+    "search_terms": "SK hynix|Hynix"
    }
   },
   {
@@ -33,7 +35,8 @@
    "name": "Kioxia Holdings",
    "type": "Competitor",
    "attrs": {
-    "listing": "285A.T"
+    "listing": "285A.T",
+    "search_terms": "Kioxia"
    }
   },
   {
@@ -41,7 +44,8 @@
    "name": "Sandisk",
    "type": "Competitor",
    "attrs": {
-    "ticker": "SNDK"
+    "ticker": "SNDK",
+    "search_terms": "SanDisk|Sandisk"
    }
   },
   {
@@ -49,7 +53,8 @@
    "name": "ChangXin Memory Technologies (private)",
    "type": "Competitor",
    "attrs": {
-    "private": true
+    "private": true,
+    "search_terms": "CXMT|ChangXin"
    }
   },
   {
@@ -57,7 +62,8 @@
    "name": "Yangtze Memory Technologies (private)",
    "type": "Competitor",
    "attrs": {
-    "private": true
+    "private": true,
+    "search_terms": "YMTC|Yangtze"
    }
   },
   {
@@ -65,7 +71,8 @@
    "name": "ASML Holding",
    "type": "Supplier",
    "attrs": {
-    "ticker": "ASML"
+    "ticker": "ASML",
+    "search_terms": "\\bASML\\b"
    }
   },
   {
@@ -73,7 +80,8 @@
    "name": "Applied Materials",
    "type": "Supplier",
    "attrs": {
-    "ticker": "AMAT"
+    "ticker": "AMAT",
+    "search_terms": "Applied Materials"
    }
   },
   {
@@ -81,7 +89,8 @@
    "name": "Lam Research",
    "type": "Supplier",
    "attrs": {
-    "ticker": "LRCX"
+    "ticker": "LRCX",
+    "search_terms": "Lam Research"
    }
   },
   {
@@ -89,7 +98,8 @@
    "name": "Tokyo Electron",
    "type": "Supplier",
    "attrs": {
-    "listing": "8035.T"
+    "listing": "8035.T",
+    "search_terms": "Tokyo Electron"
    }
   },
   {
@@ -97,46 +107,58 @@
    "name": "KLA Corporation",
    "type": "Supplier",
    "attrs": {
-    "ticker": "KLAC"
+    "ticker": "KLAC",
+    "search_terms": "\\bKLA\\b"
    }
   },
   {
    "id": "WAFERS",
    "name": "Silicon wafer suppliers (category)",
    "type": "Supplier",
-   "attrs": {}
+   "attrs": {
+    "search_terms": "silicon wafers"
+   }
   },
   {
    "id": "NVDA",
    "name": "NVIDIA (HBM customer)",
    "type": "Customer",
    "attrs": {
-    "ticker": "NVDA"
+    "ticker": "NVDA",
+    "search_terms": "NVIDIA"
    }
   },
   {
    "id": "HYPERSCALE",
    "name": "Cloud / hyperscale data-center buyers (category)",
    "type": "Customer",
-   "attrs": {}
+   "attrs": {
+    "search_terms": "hyperscal|data center"
+   }
   },
   {
    "id": "PC_OEM",
    "name": "PC OEMs (category)",
    "type": "Customer",
-   "attrs": {}
+   "attrs": {
+    "search_terms": "\\bPC\\b|personal computer"
+   }
   },
   {
    "id": "PHONE_OEM",
    "name": "Smartphone OEMs (category)",
    "type": "Customer",
-   "attrs": {}
+   "attrs": {
+    "search_terms": "smartphone"
+   }
   },
   {
    "id": "AUTO_IND",
    "name": "Automotive & industrial (category)",
    "type": "Customer",
-   "attrs": {}
+   "attrs": {
+    "search_terms": "automotive"
+   }
   },
   {
    "id": "BIS",
@@ -146,7 +168,8 @@
     "roles": [
      "gatekeeper",
      "sanctions_authority"
-    ]
+    ],
+    "search_terms": "Bureau of Industry and Security"
    }
   },
   {
@@ -157,7 +180,8 @@
     "roles": [
      "financier",
      "technology_sponsor"
-    ]
+    ],
+    "search_terms": "CHIPS Act|CHIPS Program"
    }
   },
   {
@@ -168,7 +192,8 @@
     "roles": [
      "gatekeeper"
     ],
-    "country": "China"
+    "country": "China",
+    "search_terms": "Cyberspace Administration of China"
    }
   },
   {
@@ -179,7 +204,8 @@
     "roles": [
      "financier"
     ],
-    "country": "Japan"
+    "country": "Japan",
+    "search_terms": "Ministry of Economy, Trade and Industry"
    }
   },
   {
@@ -190,20 +216,25 @@
     "roles": [
      "financier",
      "landlord"
-    ]
+    ],
+    "search_terms": "New York State|State of New York"
    }
   },
   {
    "id": "DRAM_PX",
    "name": "DRAM contract price",
    "type": "Commodity",
-   "attrs": {}
+   "attrs": {
+    "search_terms": "DRAM"
+   }
   },
   {
    "id": "NAND_PX",
    "name": "NAND contract price",
    "type": "Commodity",
-   "attrs": {}
+   "attrs": {
+    "search_terms": "NAND"
+   }
   },
   {
    "id": "TAIWAN",
@@ -211,38 +242,49 @@
    "type": "Region",
    "attrs": {
     "geo_concentration": 0.7,
-    "chokepoint": true
+    "chokepoint": true,
+    "search_terms": "Taiwan"
    }
   },
   {
    "id": "HIROSHIMA",
    "name": "Hiroshima, Japan fab",
    "type": "Region",
-   "attrs": {}
+   "attrs": {
+    "search_terms": "Hiroshima"
+   }
   },
   {
    "id": "SINGAPORE",
    "name": "Singapore NAND fabs",
    "type": "Region",
-   "attrs": {}
+   "attrs": {
+    "search_terms": "Singapore"
+   }
   },
   {
    "id": "IDAHO",
    "name": "Boise, Idaho fab project",
    "type": "Region",
-   "attrs": {}
+   "attrs": {
+    "search_terms": "Boise|Idaho"
+   }
   },
   {
    "id": "CLAY_NY",
    "name": "Clay, New York megafab project",
    "type": "Region",
-   "attrs": {}
+   "attrs": {
+    "search_terms": "Clay, New York"
+   }
   },
   {
    "id": "XIAN",
    "name": "Xi'an, China assembly & test",
    "type": "Region",
-   "attrs": {}
+   "attrs": {
+    "search_terms": "Xi'?an"
+   }
   }
  ],
  "edges": [
@@ -265,8 +307,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": ""
+   "notes": "",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e001",
@@ -287,8 +330,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": ""
+   "notes": "",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e002",
@@ -308,8 +352,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": ""
+   "notes": "",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e003",
@@ -329,8 +374,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": "HBM share competition"
+   "notes": "HBM share competition",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e004",
@@ -350,8 +396,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": "NAND"
+   "notes": "NAND",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e005",
@@ -371,8 +418,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": "NAND"
+   "notes": "NAND",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e006",
@@ -392,8 +440,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": "China DRAM capacity"
+   "notes": "China DRAM capacity",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e007",
@@ -413,8 +462,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": "China NAND capacity"
+   "notes": "China NAND capacity",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e008",
@@ -435,8 +485,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": "EUV/DUV lithography"
+   "notes": "EUV/DUV lithography",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e009",
@@ -457,8 +508,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": ""
+   "notes": "",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e010",
@@ -479,8 +531,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": ""
+   "notes": "",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e011",
@@ -501,8 +554,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": ""
+   "notes": "",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e012",
@@ -522,8 +576,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": ""
+   "notes": "",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e013",
@@ -544,8 +599,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": ""
+   "notes": "",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e014",
@@ -565,8 +621,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": "MU capex -> equipment orders"
+   "notes": "MU capex -> equipment orders",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e015",
@@ -586,8 +643,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": ""
+   "notes": "",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e016",
@@ -607,8 +665,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": ""
+   "notes": "",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e017",
@@ -629,8 +688,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": "HBM"
+   "notes": "HBM",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e018",
@@ -651,8 +711,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": "server DRAM / SSD"
+   "notes": "server DRAM / SSD",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e019",
@@ -673,8 +734,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": ""
+   "notes": "",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e020",
@@ -695,8 +757,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": ""
+   "notes": "",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e021",
@@ -717,8 +780,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": ""
+   "notes": "",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e022",
@@ -738,8 +802,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": "export controls on China sales / equipment"
+   "notes": "export controls on China sales / equipment",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e023",
@@ -759,8 +824,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": "2023 CAC review restricting MU in critical infrastructure"
+   "notes": "2023 CAC review restricting MU in critical infrastructure",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e024",
@@ -780,8 +846,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": "CHIPS Act award for US fabs"
+   "notes": "CHIPS Act award for US fabs",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e025",
@@ -801,8 +868,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": "Hiroshima subsidies"
+   "notes": "Hiroshima subsidies",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e026",
@@ -822,8 +890,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": "Clay NY incentives"
+   "notes": "Clay NY incentives",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e027",
@@ -843,8 +912,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": "share of DRAM output"
+   "notes": "share of DRAM output",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e028",
@@ -864,8 +934,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": ""
+   "notes": "",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e029",
@@ -885,8 +956,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": ""
+   "notes": "",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e030",
@@ -907,8 +979,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": ""
+   "notes": "",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e031",
@@ -929,8 +1002,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": ""
+   "notes": "",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e032",
@@ -950,8 +1024,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": ""
+   "notes": "",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e033",
@@ -971,8 +1046,9 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": ""
+   "notes": "",
+   "sec_evidence": [],
+   "history": []
   },
   {
    "id": "mu_e034",
@@ -992,8 +1068,10 @@
    "verified": false,
    "verified_by": null,
    "verified_at": null,
-   "evidence": [],
-   "notes": ""
+   "notes": "",
+   "sec_evidence": [],
+   "history": []
   }
- ]
+ ],
+ "evidence_policy": "Edges are verified only by immutable SEC passage references (accession, document sha256, exact passage, offset, passage sha256). Free-text citations are ignored."
 }

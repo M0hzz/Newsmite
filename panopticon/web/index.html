@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Market Panopticon</title>
+<style>
+:root{--bg:#f7f7f5;--panel:#fff;--ink:#1b1d21;--muted:#5d6370;--line:#e3e3df;--accent:#2f5bd3;--neg:#b3261e;--pos:#1d7a46;--warn:#9a6a00;--chip:#eef1f8}
+@media (prefers-color-scheme:dark){:root{--bg:#121316;--panel:#1b1d22;--ink:#e8e9ec;--muted:#9aa0ab;--line:#2c2f36;--accent:#8aa8ff;--neg:#ff8a80;--pos:#6fd39a;--warn:#e6b84f;--chip:#252a36}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:2}
+h1{font-size:16px;margin:0 12px 0 0;letter-spacing:.02em}input,select,button{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 10px}
+button{cursor:pointer;background:var(--accent);color:#fff;border:0}button.ghost{background:transparent;color:var(--accent);border:1px solid var(--line)}
+nav{display:flex;gap:6px;flex-wrap:wrap}nav button{background:transparent;color:var(--muted);border:1px solid transparent}nav button.on{color:var(--ink);border-color:var(--line);background:var(--bg)}
+main{max-width:1180px;margin:0 auto;padding:16px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0}.card h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 10px}
+.demo{font-size:12px;color:var(--warn)}.muted{color:var(--muted)}.neg{color:var(--neg)}.pos{color:var(--pos)}
+.item{padding:8px 0;border-top:1px solid var(--line)}.item:first-of-type{border-top:0}.chip{display:inline-block;background:var(--chip);border-radius:4px;padding:0 6px;font-size:12px;margin-right:4px}
+.path{font-size:12px;color:var(--muted)}ul{margin:4px 0 0 18px;padding:0}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600}.scroll{overflow-x:auto}.q{display:block;width:100%;text-align:left;margin:4px 0;background:transparent;color:var(--ink);border:1px solid var(--line)}
+.q:hover{border-color:var(--accent)}pre{white-space:pre-wrap;font-size:12px}.md h1{font-size:20px}.md h2{font-size:16px;margin-top:22px}.md h3{font-size:14px}
+</style>
+</head>
+<body>
+<header>
+  <h1>MARKET PANOPTICON</h1>
+  <input id="ticker" value="HLCN" size="6" aria-label="Ticker">
+  <input id="asof" type="date" aria-label="As of date">
+  <button id="go">Investigate</button>
+  <nav id="tabs"></nav>
+  <span class="demo">Demo universe: all entities fictional</span>
+</header>
+<main id="view"></main>
+<script>
+const $=s=>document.querySelector(s);const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let meta=null,tab="home";
+const TABS={home:"Home",ask:"Investigations",shock:"Shock sandbox",signals:"OptLab signals",dossier:"Dossier"};
+async function api(p){const r=await fetch(p);const ct=r.headers.get("content-type")||"";const b=ct.includes("json")?await r.json():await r.text();if(!r.ok)throw new Error(b.error||b);return b}
+const qs=()=>`ticker=${encodeURIComponent($("#ticker").value.trim())}&as_of=${$("#asof").value}`;
+const sgn=x=>`<span class="${x<0?"neg":"pos"}">${x>0?"+":""}${(+x).toFixed(3)}</span>`;
+function tabs(){$("#tabs").innerHTML=Object.entries(TABS).map(([k,v])=>`<button class="${k===tab?"on":""}" data-t="${k}">${v}</button>`).join("");
+  document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>{tab=b.dataset.t;tabs();show()})}
+function table(rows){if(!rows||!rows.length)return'<p class="muted">Nothing above threshold.</p>';if(typeof rows[0]!=="object")return`<ul>${rows.map(r=>`<li>${esc(r)}</li>`).join("")}</ul>`;
+  const keys=[...new Set(rows.flatMap(r=>Object.keys(r)))];
+  return`<div class="scroll"><table><tr>${keys.map(k=>`<th>${esc(k)}</th>`).join("")}</tr>${rows.map(r=>`<tr>${keys.map(k=>{const v=r[k];
+   return`<td>${typeof v==="number"?(Math.abs(v)<10&&!Number.isInteger(v)?v.toFixed(3):v):Array.isArray(v)?(v.length&&typeof v[0]==="object"?table(v):esc(v.join(" → "))):v&&typeof v==="object"?`<pre>${esc(JSON.stringify(v,null,1))}</pre>`:esc(v)}</td>`}).join("")}</tr>`).join("")}</table></div>`}
+async function home(){const h=await api(`/api/home?${qs()}`);
+ const ch=h.meaningful_changes.map(c=>`<div class="item"><div>${sgn(c.influence)} ${esc(c.claim)}</div><div class="path"><span class="chip">${esc(c.status)}</span><span class="chip">${esc(c.event_type)}</span> quality ${c.evidence_quality} · novelty ${c.novelty} · ${c.n_documents} docs → 1 claim</div><div class="path">${esc(c.path.join(" → "))}</div></div>`).join("");
+ const cx=h.unresolved_contradictions.map(c=>`<div class="item"><b>${esc(c.market_assumption)}</b> <span class="chip">${esc(c.kind)}</span><span class="chip">conf ${c.confidence}</span><span class="chip">${esc(c.resolution_window)}</span><ul>${c.conflicting_observations.map(o=>`<li>BUT ${esc(o)}</li>`).join("")}</ul></div>`).join("");
+ const rp=h.expanding_risk_path;const ob=h.overlooked_beneficiary;
+ $("#view").innerHTML=`<p class="muted">${esc(h.entity)} · as of ${h.as_of} · ${h.reduction.documents} documents → ${h.reduction.claims} claims → ${h.reduction.material} material changes (30d) · ${h.signals_exported} packets exported</p>
+ <div class="grid"><section class="card"><h2>Three meaningful changes</h2>${ch}</section><section class="card"><h2>Two unresolved contradictions</h2>${cx}</section>
+ <section class="card"><h2>One expanding risk path</h2>${rp?`<div>${esc(rp.path.join(" → "))}</div><div class="path">${esc(rp.driver)} · influence ${sgn(rp.influence_before)} → ${sgn(rp.influence_now)} · lag ${rp.lag_days}d</div>`:"None"}</section>
+ <section class="card"><h2>One overlooked beneficiary</h2>${ob?`<div><b>${esc(ob.ticker)}</b> ${esc(ob.entity)} <span class="chip">score ${ob.score}</span></div><div class="path">trigger: ${esc(ob.trigger)}</div><ul>${ob.reasons.map(r=>`<li>${esc(r)}</li>`).join("")}</ul>`:"None"}</section>
+ <section class="card"><h2>Upcoming resolution points</h2>${h.upcoming_resolution_points.map(u=>`<div class="item"><b>${u.date}</b> <span class="chip">${esc(u.kind)}</span> ${esc(u.description)}</div>`).join("")}</section>
+ <section class="card"><h2>Investigations</h2>${h.investigations.map(i=>`<button class="q" data-q="${i.key}">${esc(i.question)}</button>`).join("")}</section></div>`;
+ document.querySelectorAll(".q").forEach(b=>b.onclick=()=>{tab="ask";tabs();ask(b.dataset.q)})}
+async function ask(key){key=key||Object.keys(meta.questions)[0];
+ $("#view").innerHTML=`<div class="grid" style="grid-template-columns:minmax(260px,1fr) 3fr"><section class="card"><h2>Questions</h2>${Object.entries(meta.questions).map(([k,q])=>`<button class="q" data-q="${k}" style="${k===key?"border-color:var(--accent)":""}">${esc(q)}</button>`).join("")}</section><section class="card" id="ans"><p class="muted">Loading…</p></section></div>`;
+ document.querySelectorAll(".q").forEach(b=>b.onclick=()=>ask(b.dataset.q));
+ const a=await api(`/api/ask?${qs()}&q=${key}`);const ans=a.answer;
+ $("#ans").innerHTML=`<h2>${esc(a.question)}</h2>`+(Array.isArray(ans)?table(ans):Object.entries(ans).map(([k,v])=>`<h3>${esc(k)}</h3>${table(v)}`).join(""))}
+async function shock(preset){preset=preset||"export_restriction";
+ $("#view").innerHTML=`<section class="card"><h2>Inject a shock</h2><select id="preset">${Object.entries(meta.presets).map(([k,v])=>`<option value="${k}" ${k===preset?"selected":""}>${esc(v)}</option>`).join("")}</select> <button id="run">Propagate</button></section><div id="res" class="grid" style="margin-top:14px"></div>`;
+ $("#run").onclick=()=>shock($("#preset").value);
+ const r=await api(`/api/shock?preset=${preset}&as_of=${$("#asof").value}`);
+ const imp=rows=>rows.length?rows.slice(0,8).map(x=>`<div class="item">${sgn(x.effect)} <b>${esc(x.entity)}</b> <span class="muted">lag ${x.lag_days}d</span><div class="path">${esc(x.via)}</div></div>`).join(""):'<p class="muted">None above threshold.</p>';
+ const sec=(t,b)=>`<section class="card"><h2>${t}</h2>${b}</section>`;
+ $("#res").innerHTML=sec("First order",imp(r.first_order))+sec("Second order",imp(r.second_order))+sec("Third order+",imp(r.third_order_plus))+sec("Delayed effects (≥90d)",imp(r.delayed_effects))+sec("Possible substitutions",imp(r.substitutions))
+  +sec("Government responses",table(r.government_responses))+sec("Capital-market consequences",table(r.capital_market_consequences))+sec("Contradictory effects",imp(r.contradictory_effects))
+  +sec("Greatest net exposure (securities)",imp(r.greatest_net_exposure))+sec("Expectations least aligned",table(r.expectations_least_aligned))}
+async function signals(){const s=await api(`/api/signals?${qs()}`);
+ $("#view").innerHTML=`<section class="card"><h2>Signal packets (schema panopticon.signal/1)</h2><p class="muted">Hypotheses for OptLab to test. No packet is built from narrative-only evidence. trading_clock_eligible stays false until OptLab has validated a translation layer.</p>
+ ${s.map(p=>`<details class="item"><summary><b>${esc(p.signal_type)}</b> <span class="chip">${p.direction}</span><span class="chip">${p.horizon}</span><span class="chip">conf ${p.confidence}</span><span class="chip">materiality ${p.expected_materiality}</span><span class="chip">awareness ${p.market_awareness}</span></summary><pre>${esc(JSON.stringify(p,null,2))}</pre></details>`).join("")}</section>`}
+function md(t){const lines=t.split("\n");let h="",inT=false,inL=false;const inline=s=>esc(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/`(.+?)`/g,"<code>$1</code>").replace(/_(.+?)_/g,"<i>$1</i>");
+ for(const l of lines){if(l.startsWith("|")){if(/^\|[-:| ]+\|$/.test(l))continue;const cells=l.split("|").slice(1,-1);h+=(inT?"":'<div class="scroll"><table>')+`<tr>${cells.map(c=>`<td>${inline(c.trim())}</td>`).join("")}</tr>`;inT=true;continue}
+  if(inT){h+="</table></div>";inT=false}
+  if(/^\s*- /.test(l)){h+=(inL?"":"<ul>")+`<li>${inline(l.replace(/^\s*- /,""))}</li>`;inL=true;continue}if(inL){h+="</ul>";inL=false}
+  const m=l.match(/^(#{1,3}) (.*)/);h+=m?`<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`:l.trim()?`<p>${inline(l)}</p>`:""}
+ return h+(inT?"</table></div>":"")+(inL?"</ul>":"")}
+async function dossier(){$("#view").innerHTML=`<section class="card md">${md(await api(`/api/dossier?${qs()}`))}</section>`}
+async function show(){try{$("#view").innerHTML='<p class="muted">Loading…</p>';await({home,ask,shock,signals,dossier})[tab]()}catch(e){$("#view").innerHTML=`<p class="neg">${esc(e.message)}</p>`}}
+(async()=>{meta=await api("/api/meta");$("#asof").value=meta.as_of;tabs();$("#go").onclick=show;$("#ticker").onkeydown=e=>{if(e.key==="Enter")show()};show()})();
+</script>
+</body>
+</html>

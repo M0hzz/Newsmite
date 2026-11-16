@@ -1,0 +1,65 @@
+Shock: Export restriction on high-end accelerators
+
+Immediate (1st order):
+  - Corvid Silicon                     -0.265  lag  30d  via Bureau of Technology Export Controls -> Corvid Silicon
+  - Meridian Logic                     -0.131  lag  30d  via Bureau of Technology Export Controls -> Meridian Logic
+  - Halcyon Compute                    -0.125  lag  30d  via Bureau of Technology Export Controls -> Halcyon Compute
+
+Second order:
+  - Ardent Packaging                   -0.103  lag 120d  via Bureau of Technology Export Controls -> Halcyon Compute -> Ardent Packaging
+  - HLCN 4.25% notes due 2028          -0.075  lag  30d  via Bureau of Technology Export Controls -> Halcyon Compute -> HLCN 4.25% notes due 2028
+  - Sable Thermal                      -0.069  lag  90d  via Bureau of Technology Export Controls -> Halcyon Compute -> Sable Thermal
+  - Sovereign AI programs (category)   -0.063  lag 120d  via Bureau of Technology Export Controls -> Halcyon Compute -> Sovereign AI programs (category)
+  - Kestrel Foundry                    -0.057  lag 120d  via Bureau of Technology Export Controls -> Halcyon Compute -> Kestrel Foundry
+  - Atlas Data Centers                 -0.050  lag  90d  via Bureau of Technology Export Controls -> Halcyon Compute -> Atlas Data Centers
+
+Third order+:
+  (none above threshold)
+
+Delayed effects (>=90d):
+  - Ardent Packaging                   -0.103  lag 120d  via Bureau of Technology Export Controls -> Halcyon Compute -> Ardent Packaging
+  - Sable Thermal                      -0.069  lag  90d  via Bureau of Technology Export Controls -> Halcyon Compute -> Sable Thermal
+  - Sovereign AI programs (category)   -0.063  lag 120d  via Bureau of Technology Export Controls -> Halcyon Compute -> Sovereign AI programs (category)
+  - Kestrel Foundry                    -0.057  lag 120d  via Bureau of Technology Export Controls -> Halcyon Compute -> Kestrel Foundry
+  - Atlas Data Centers                 -0.050  lag  90d  via Bureau of Technology Export Controls -> Halcyon Compute -> Atlas Data Centers
+  - Stratus Cloud                      -0.038  lag  90d  via Bureau of Technology Export Controls -> Halcyon Compute -> Stratus Cloud
+
+Substitutions:
+  + Redoubt Microsystems               +0.032  lag 150d  via Bureau of Technology Export Controls -> Halcyon Compute -> Redoubt Microsystems
+  + Tessellate AI (private)            +0.025  lag 210d  via Bureau of Technology Export Controls -> Halcyon Compute -> Tessellate AI (private)
+  + Brightwater Semi                   +0.019  lag 150d  via Bureau of Technology Export Controls -> Halcyon Compute -> Brightwater Semi
+  + Oakhollow Systems                  +0.016  lag 150d  via Bureau of Technology Export Controls -> Halcyon Compute -> Oakhollow Systems
+
+Contradictory effects:
+  - Halcyon Compute                    -0.125  lag  30d  via Bureau of Technology Export Controls -> Halcyon Compute
+  - Meridian Logic                     -0.131  lag  30d  via Bureau of Technology Export Controls -> Meridian Logic
+  - Stratus Cloud                      -0.038  lag  90d  via Bureau of Technology Export Controls -> Halcyon Compute -> Stratus Cloud
+  - Nimbus Hyperscale                  -0.038  lag  90d  via Bureau of Technology Export Controls -> Halcyon Compute -> Nimbus Hyperscale
+  - Atlas Data Centers                 -0.050  lag  90d  via Bureau of Technology Export Controls -> Halcyon Compute -> Atlas Data Centers
+  - Sovereign AI programs (category)   -0.063  lag 120d  via Bureau of Technology Export Controls -> Halcyon Compute -> Sovereign AI programs (category)
+
+Government responses:
+  - Bureau of Technology Export Controls: Issue general licences / carve-outs for allied customers (triggered by Halcyon Compute, Corvid Silicon)
+  - Defense Procurement Agency: Shift trusted-accelerator procurement toward domestic supplier Redoubt (triggered by Halcyon Compute, Kestrel Foundry)
+  - Department of Industrial Strategy: Accelerate fab-incentive disbursement / emergency grants (triggered by Kestrel Foundry, Sable Thermal)
+  - Energy Regulatory Commission: Emergency regional power-price cap (triggered by Atlas Data Centers, Sable Thermal)
+
+Capital-market consequences:
+  - HLCN 4.25% notes due 2028: -0.075 capital holder exposed
+  - Sable Thermal: -0.069 levered (3.4x net debt/EBITDA): refinancing vulnerability
+  - Atlas Data Centers: -0.050 levered (4.2x net debt/EBITDA): refinancing vulnerability
+  - Semiconductor index ETF: -0.034 capital holder exposed
+  - Larchmont Capital (8.1% holder): -0.015 capital holder exposed
+
+Potential mispricing (effect x (1 - market awareness)):
+  - ARDP  effect -0.103  awareness 0.45  score 0.056
+      * no consensus assumption already points this way
+  - CRVD  effect -0.265  awareness 0.80  score 0.053
+      * no consensus assumption already points this way
+  - SBLT  effect -0.069  awareness 0.24  score 0.053
+      * low analyst coverage (4 analysts)
+      * no consensus assumption already points this way
+  - MRDL  effect -0.131  awareness 0.63  score 0.049
+      * no consensus assumption already points this way
+  - PLSB  effect -0.038  awareness 0.28  score 0.027
+      * no consensus assumption already points this way

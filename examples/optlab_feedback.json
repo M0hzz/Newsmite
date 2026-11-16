@@ -1,0 +1,14 @@
+{
+  "_comment": "Illustrative OptLab feedback. In production this file is written by OptLab after backtests, never by hand.",
+  "signal_priors": [
+    {"signal_type": "CAPACITY_CONSTRAINT", "industry": "semiconductors", "weight": 1.2, "predicts": "direction",
+     "best_horizon": "1_to_3_quarters", "notes": "supplier hiring contraction useful for revenue in this vertical"},
+    {"signal_type": "PROCUREMENT_TAILWIND", "industry": "*", "weight": 0.8, "predicts": "volatility",
+     "notes": "agency contract pipeline predicts volatility but not direction"},
+    {"signal_type": "CONTRADICTION_MANAGEMENT_VS_OPERATIONS", "industry": "*", "weight": 1.3, "predicts": "direction",
+     "best_horizon": "20_to_60_trading_days_pre_earnings"},
+    {"signal_type": "SUPPLY_CHAIN_MARGIN_PRESSURE", "industry": "*", "weight": 0.6, "predicts": "direction",
+     "notes": "commodity shock predictive only when inventory below threshold"}
+  ],
+  "edge_multipliers": {"LEADS": 1.1, "CORRELATED_WITH": 0.7}
+}

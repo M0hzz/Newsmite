@@ -18,7 +18,7 @@ def _b(x: float | None) -> str:
 def metrics_table(store: Store, as_of: str, n: int = 6) -> list[str]:
     """Only TRUSTED values are shown; quarantined cells say so. Every number cites its fact contexts."""
     rows = periods.quarter_table(store, as_of)[-n:]
-    L = ["| Quarter end | Revenue | Gross margin | Inventory | Days of inventory | Capex | First public |",
+    L = ["| Quarter end | Revenue | Gross margin | Inventory | Ending-inventory coverage (days) | Capex | First public |",
          "|---|---:|---:|---:|---:|---:|---|"]
     notes: list[str] = []
 

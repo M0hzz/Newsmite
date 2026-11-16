@@ -296,8 +296,34 @@ class ReviewExportTests(unittest.TestCase):
             c = pkt["claims"][0]
             self.assertEqual(c["status"], "pending")
             self.assertTrue(c["checks"]["available_at_equals_latest_input"])
-            self.assertTrue(c["checks"]["every_fact_has_context"])
+            self.assertTrue(c["checks"]["no_quarantined_inputs"])
+            self.assertTrue(c["checks"]["inputs_match_recomputation"])
             self.assertEqual(c["history"][0]["action"], "proposed")
+
+    def test_quarantine_input_check_detects_quarantined_input(self):
+        from panopticon.live.verify import verify_claim
+        with tempfile.TemporaryDirectory() as d:
+            st = Store(d)
+            ingest(st, EdgarClient(transport=FakeSEC()), "XMU", "2026-01-01")
+            for start, end, val, acc, acc_at in [("2025-11-28", "2026-02-26", 300.0, ACC_Q2, "2026-03-19T22:00:00Z"),
+                                                 ("2026-02-27", "2026-05-28", 400.0, ACC_Q3, "2026-06-24T22:00:00Z")]:
+                st.put_fact("CostOfGoodsAndServicesSold", "USD", start, end, val, acc, "10-Q", "Q", 2026,
+                            acc_at[:10], acc_at, report_period=end)
+            extract_all(st, "XMU")
+            c = next(x for x in st.claims() if x["family"] == "INVENTORY" and x["event_time"] == "2026-05-28")
+            ok = verify_claim(st, c)
+            self.assertTrue(ok["no_quarantined_inputs"] and ok["inputs_match_recomputation"]
+                            and ok["calculation_reproduces"])
+            self.assertIn("ending-inventory coverage", c["statement"])
+            self.assertEqual(c["calculation"]["ending_inventory_coverage"]["current"]["quarter_days"], 91)
+            # an incompatible second COGS quarter context for the same date, public before the claim
+            st.put_fact("CostOfGoodsAndServicesSold", "USD", "2026-03-01", "2026-05-28", 380.0,
+                        "0000999999-26-000099", "10-Q", "Q", 2026, "2026-06-01", "2026-06-01T00:00:00Z",
+                        report_period="2026-05-28")
+            bad = verify_claim(st, c)
+            self.assertFalse(bad["no_quarantined_inputs"])
+            self.assertTrue(any("incompatible" in r for i in bad["inputs"] for r in i["reasons"]))
+            st.close()
 
 
 class QuarterLengthTests(unittest.TestCase):

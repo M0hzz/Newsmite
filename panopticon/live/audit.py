@@ -47,9 +47,9 @@ def audit_rows(store: Store, as_of: str | None = None, ends: list[str] | None = 
                      "status": r.margin_status, "method": r.margin_formula or "gross profit / revenue",
                      "reasons": r.margin_reasons, "start": r.revenue.start if r.revenue else None, "days": None,
                      "inputs": _plain(r.margin_inputs), "concept": "(computed)", "unit": "ratio"})
-        rows.append({"metric": "Days of inventory", "quarter_end": r.end, "value": r.dio,
+        rows.append({"metric": "Ending-inventory coverage (days)", "quarter_end": r.end, "value": r.dio,
                      "status": periods.TRUSTED if r.dio is not None else periods.QUARANTINED,
-                     "method": r.dio_formula or "inventory / quarterly COGS x quarter days",
+                     "method": r.dio_formula or "ending inventory / quarterly COGS x quarter days",
                      "reasons": [] if r.dio is not None else ["inventory or COGS quarter not trusted"],
                      "start": None, "days": None, "inputs": _plain(r.dio_inputs), "concept": "(computed)",
                      "unit": "days"})

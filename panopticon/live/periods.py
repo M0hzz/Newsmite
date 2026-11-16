@@ -270,6 +270,34 @@ def instants(store: Store, concept: str, as_of: str | None = None, unit: str = "
     return out
 
 
+COVERAGE_DEFINITION = ("ending-inventory coverage = ending inventory balance / cost of goods sold for the quarter "
+                       "ending on that date x actual days in that quarter. Uses ENDING (not average) inventory, so it "
+                       "is not the textbook average-inventory DIO.")
+
+
+def coverage_calc(inventory: "Value", cogs: "Value") -> dict:
+    return {
+        "metric": "ending_inventory_coverage_days",
+        "definition": COVERAGE_DEFINITION,
+        "ending_inventory": {"value": inventory.val, "date": inventory.end,
+                             "obs_ids": [i["obs_id"] for i in inventory.inputs]},
+        "quarterly_cogs": {"value": cogs.val, "start": cogs.start, "end": cogs.end, "method": cogs.method,
+                           "obs_ids": [i["obs_id"] for i in cogs.inputs]},
+        "quarter_days": cogs.days,
+        "formula": "ending_inventory / quarterly_cogs * quarter_days",
+        "result_unrounded": inventory.val / cogs.val * cogs.days,
+    }
+
+
+def value_for(store: Store, concept: str, end: str, as_of: str | None = None) -> "Value | None":
+    """Recompute the normalized value a claim relied on, exactly as the pipeline would at ``as_of``."""
+    if concept in REVENUE_CONCEPTS:
+        return revenue_quarters(store, as_of).get(end)
+    if concept == "InventoryNet":
+        return instants(store, concept, as_of).get(end)
+    return quarters(store, concept, as_of).get(end)
+
+
 @dataclass
 class QuarterRow:
     end: str
@@ -286,6 +314,7 @@ class QuarterRow:
     margin_formula: str = ""
     dio_inputs: list[dict] = field(default_factory=list)
     dio_formula: str = ""
+    dio_calc: dict = field(default_factory=dict)   # structured, unrounded
 
 
 def quarter_table(store: Store, as_of: str | None = None) -> list[QuarterRow]:
@@ -325,7 +354,9 @@ def quarter_table(store: Store, as_of: str | None = None) -> list[QuarterRow]:
         if ok(r.inventory) and ok(r.cogs) and r.cogs.val > 0:
             r.dio = r.inventory.val / r.cogs.val * r.cogs.days
             r.dio_inputs = r.inventory.inputs + r.cogs.inputs
-            r.dio_formula = (f"DIO = inventory {r.inventory.val / 1e6:,.0f} / quarterly COGS {r.cogs.val / 1e6:,.0f} "
-                             f"x {r.cogs.days} days ({r.cogs.start}..{r.cogs.end}) = {r.dio:.1f} days")
+            r.dio_formula = (f"Ending-inventory coverage = ending inventory {r.inventory.val / 1e6:,.0f} / quarterly "
+                             f"COGS {r.cogs.val / 1e6:,.0f} x {r.cogs.days} days ({r.cogs.start}..{r.cogs.end}) "
+                             f"= {r.dio:.4f} days")
+            r.dio_calc = coverage_calc(r.inventory, r.cogs)
         rows.append(r)
     return rows

@@ -93,24 +93,10 @@ def add_parser(sub) -> None:
 
 
 def review_packet(store: Store, rows: list[dict], args) -> dict:
-    """Claims with full evidence, history and mechanical review checks (checks inform; they never approve)."""
-    claims = []
-    for r in rows:
-        ev = r["evidence"]
-        latest_input = max((e.get("accepted_at") or "" for e in ev), default="")
-        facts = [e for e in ev if e.get("type") == "xbrl_fact"]
-        checks = {
-            "available_at_equals_latest_input": r["available_at"] == latest_input if ev else None,
-            "all_inputs_public_by_available_at": all((e.get("accepted_at") or "") <= r["available_at"] for e in ev),
-            "evidence_count": len(ev),
-            "fact_classes": sorted({e.get("class") or "?" for e in facts}) if facts else None,
-            "derivations": sorted({f"{e['derivation']['metric']} {e['derivation']['period_end']}: "
-                                   f"{e['derivation']['method']}" for e in facts if e.get("derivation")}) or None,
-            "every_fact_has_context": all(e.get("obs_id") and e.get("accession") and e.get("end") for e in facts)
-            if facts else None,
-            "supersedes": r.get("supersedes"),
-        }
-        claims.append({**r, "history": [dict(h) for h in store.history(r["claim_id"])], "checks": checks})
+    """Claims with full evidence, calculation, history and mechanical checks (checks never approve)."""
+    from .verify import verify_claim
+    claims = [{**r, "history": [dict(h) for h in store.history(r["claim_id"])], "checks": verify_claim(store, r)}
+              for r in rows]
     return {"generated_at": _now(), "filters": {"ticker": args.ticker, "family": args.family,
                                                  "status": args.status}, "count": len(claims), "claims": claims,
             "note": "Checks are mechanical aids. Approval requires a human decision: live approve <id> --by NAME."}
@@ -161,7 +147,7 @@ def run(args) -> int:
                 print(f"skip {cid}: not found / ambiguous", file=sys.stderr)
                 continue
             store.review(r["claim_id"], "approved" if c == "approve" else "rejected", args.by, args.note)
-            out.write(f"{c}d {r['claim_id']}: {r['statement'][:100]}\n")
+            out.write(f"{c.rstrip('e')}ed {r['claim_id']}: {r['statement'][:100]}\n")
     elif c == "dossier":
         rel = load_relationships(REL_DIR / f"{args.ticker.upper()}.json")
         out.write(live_dossier.render(store, rel, args.ticker.upper(), args.as_of or _now()) + "\n")

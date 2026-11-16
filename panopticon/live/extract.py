@@ -5,7 +5,7 @@ a deterministic id (so re-running cannot duplicate), the economic time it descri
 the acceptance time it became knowable, and the exact evidence it rests on.
 
 Claim families (first live slice):
-  INVENTORY        inventory level, QoQ change, days of inventory
+  INVENTORY        inventory level, QoQ change, ending-inventory coverage (days)
   PRICING_MARGIN   gross margin and its quarter-over-quarter change
   CAPACITY_CAPEX   quarterly capital expenditure
   GEO_REGULATORY   10-K disclosures on China/CAC, export controls, CHIPS Act, tariffs, geography
@@ -37,15 +37,17 @@ def _pct(x: float) -> str:
 
 def _value_evidence(store: Store, values: list) -> list[dict]:
     """One evidence entry per SEC fact context used, with how it was combined."""
-    ev, seen = [], set()
+    ev, seen = [], {}
     for v in values:
         formula = {"direct": "direct quarterly context", "direct+ytd_check": "direct quarterly context "
                    "(cross-checked against cumulative YTD difference)", "ytd_diff": "derived: later cumulative "
                    "context minus earlier cumulative context", "instant": "instant balance"}[v.method]
         for i in v.inputs:
-            if i["obs_id"] in seen:
+            der = {"metric": v.concept, "period_end": v.end, "method": v.method}
+            if i["obs_id"] in seen:   # one fact can feed several derivations: record all of them
+                if der not in seen[i["obs_id"]]["derivations"]:
+                    seen[i["obs_id"]]["derivations"].append(der)
                 continue
-            seen.add(i["obs_id"])
             doc = store.iter_rows("SELECT doc_id, url FROM documents WHERE accession=? LIMIT 1", (i["accession"],))
             passage = (f"XBRL us-gaap:{i['concept']} = {i['val']:,.0f} {i['unit']} for "
                        f"{(i['start'] + ' to ') if i['start'] else ''}{i['end']} [{i.get('class')}] "
@@ -55,9 +57,10 @@ def _value_evidence(store: Store, values: list) -> list[dict]:
                        "value": i["val"], "frame": i.get("frame"), "fy": i.get("fy"), "fp": i.get("fp"),
                        "form": i["form"], "filed": i["filed"], "class": i.get("class"),
                        "report_period": i.get("report_period"), "accepted_at": i["accepted_at"],
-                       "derivation": {"metric": v.concept, "period_end": v.end, "method": v.method},
+                       "derivation": der, "derivations": [der],
                        "doc_id": doc[0]["doc_id"] if doc else None, "url": doc[0]["url"] if doc else None,
                        "passage": passage, "passage_sha256": sha256(passage.encode())})
+            seen[i["obs_id"]] = ev[-1]
     return ev
 
 
@@ -81,6 +84,9 @@ def _trusted(v) -> bool:
     return v is not None and v.status == periods.TRUSTED
 
 
+INVENTORY_VERSION = "inventory_v2"   # v2: 'ending-inventory coverage' wording + structured calculation lineage
+
+
 def inventory_claims(store: Store, subject: str, as_of: str | None = None) -> int:
     rows = periods.quarter_table(store, as_of)
     inv = [r for r in rows if _trusted(r.inventory)]
@@ -92,16 +98,26 @@ def inventory_claims(store: Store, subject: str, as_of: str | None = None) -> in
         chg = a.val / b.val - 1
         stmt = f"Inventory {_b(a.val)} at {cur.end}, {_pct(chg)} vs {prev.end}"
         used = [a, b]
+        calc = {
+            "version": INVENTORY_VERSION,
+            "ending_inventory": {
+                "current": {"value": a.val, "date": a.end, "obs_ids": [i["obs_id"] for i in a.inputs]},
+                "prior": {"value": b.val, "date": b.end, "obs_ids": [i["obs_id"] for i in b.inputs]}},
+            "qoq_change": {"formula": "current / prior - 1", "result_unrounded": chg},
+        }
         if cur.dio is not None and prev.dio is not None:
-            stmt += f"; days of inventory {cur.dio:.0f} vs {prev.dio:.0f}"
+            stmt += f"; ending-inventory coverage {cur.dio:.0f} days vs {prev.dio:.0f}"
             if cur.cogs.days != 91 or prev.cogs.days != 91:
                 stmt += f" (quarters of {cur.cogs.days} and {prev.cogs.days} days)"
+            calc["ending_inventory_coverage"] = {"current": cur.dio_calc, "prior": prev.dio_calc,
+                                                 "change_days_unrounded": cur.dio - prev.dio}
             used += [cur.cogs, prev.cogs]
         n += _propose(store, {
-            "claim_id": "cc_" + short_hash(INVENTORY, subject, cur.end, a.val, b.val, cur.dio and round(cur.dio)),
+            "claim_id": "cc_" + short_hash(INVENTORY_VERSION, subject, cur.end, a.val, b.val,
+                                           cur.dio and round(cur.dio, 6)),
             "family": INVENTORY, "subject": subject, "metric": "inventory", "statement": stmt,
             "change": round(chg, 4), "event_time": cur.end, "available_at": max(v.available_at for v in used),
-            "evidence": _value_evidence(store, used)})
+            "evidence": _value_evidence(store, used), "calculation": calc})
     return n
 
 

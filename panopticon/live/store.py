@@ -76,7 +76,8 @@ CREATE TABLE IF NOT EXISTS candidate_claims (
     supersedes TEXT,                    -- claim_id this one updates (restatement / newer period)
     status TEXT NOT NULL DEFAULT 'pending',   -- pending | approved | rejected
     created_at TEXT NOT NULL,
-    reviewed_by TEXT, reviewed_at TEXT, review_note TEXT
+    reviewed_by TEXT, reviewed_at TEXT, review_note TEXT,
+    calculation TEXT                    -- JSON: structured, unrounded calculation lineage
 );
 
 CREATE TABLE IF NOT EXISTS claim_history (
@@ -104,6 +105,8 @@ class Store:
         self.db = sqlite3.connect(self.root / "panopticon.db")
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
+        if "calculation" not in {r[1] for r in self.db.execute("PRAGMA table_info(candidate_claims)")}:
+            self.db.execute("ALTER TABLE candidate_claims ADD COLUMN calculation TEXT")  # additive, no data change
         cols = {r[1] for r in self.db.execute("PRAGMA table_info(fact_observations)")}
         if "report_period" not in cols:
             raise RuntimeError(f"{self.root} was built by an older schema; rebuild it "
@@ -213,9 +216,11 @@ class Store:
     def put_candidate(self, c: dict) -> bool:
         cur = self.db.execute(
             "INSERT OR IGNORE INTO candidate_claims (claim_id, family, subject, metric, statement, change, "
-            "event_time, available_at, evidence, supersedes, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            "event_time, available_at, evidence, supersedes, status, created_at, calculation) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (c["claim_id"], c["family"], c["subject"], c["metric"], c["statement"], c["change"], c["event_time"],
-             c["available_at"], json.dumps(c["evidence"]), c.get("supersedes"), "pending", now()))
+             c["available_at"], json.dumps(c["evidence"]), c.get("supersedes"), "pending", now(),
+             json.dumps(c["calculation"]) if c.get("calculation") is not None else None))
         if cur.rowcount == 1:
             self.db.execute("INSERT INTO claim_history VALUES (?,?,?,?,?)",
                             (c["claim_id"], now(), "proposed", "extractor", None))
@@ -234,6 +239,7 @@ class Store:
         for r in self.db.execute(q + " ORDER BY available_at, claim_id", args):
             d = dict(r)
             d["evidence"] = json.loads(d["evidence"])
+            d["calculation"] = json.loads(d["calculation"]) if d.get("calculation") else None
             out.append(d)
         return out
 

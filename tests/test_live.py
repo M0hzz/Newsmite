@@ -326,6 +326,36 @@ class ReviewExportTests(unittest.TestCase):
             st.close()
 
 
+class MarginV2Tests(unittest.TestCase):
+    def test_margin_claim_lineage_and_checks(self):
+        from panopticon.live.verify import verify_claim
+        with tempfile.TemporaryDirectory() as d:
+            st = Store(d)
+            ingest(st, EdgarClient(transport=FakeSEC()), "XMU", "2026-01-01")
+            for start, end, val, acc, acc_at in [("2025-11-28", "2026-02-26", 300.0, ACC_Q2, "2026-03-19T22:00:00Z"),
+                                                 ("2026-02-27", "2026-05-28", 300.0, ACC_Q3, "2026-06-24T22:00:00Z")]:
+                st.put_fact("CostOfGoodsAndServicesSold", "USD", start, end, val, acc, "10-Q", "Q", 2026,
+                            acc_at[:10], acc_at, report_period=end)
+            extract_all(st, "XMU")
+            c = next(x for x in st.claims() if x["family"] == "PRICING_MARGIN" and x["event_time"] == "2026-05-28")
+            calc = c["calculation"]
+            self.assertEqual(calc["version"], "margin_v2")
+            self.assertAlmostEqual(calc["current"]["margin_unrounded"], 300 / 600)
+            self.assertAlmostEqual(calc["prior"]["margin_unrounded"], 200 / 500)
+            self.assertEqual(calc["current"]["quarter"]["days"], 91)
+            self.assertTrue(calc["current"]["identity_check"]["checked"])
+            self.assertAlmostEqual(calc["current"]["identity_check"]["residual"], 0.0)
+            v = verify_claim(st, c)
+            for k in ("calculation_reproduces", "inputs_match_recomputation", "no_quarantined_inputs",
+                      "available_at_equals_latest_input", "identity_checked_both_quarters"):
+                self.assertTrue(v[k], k)
+            # a conflicting gross-profit quarter context, public before the claim, quarantines an input
+            st.put_fact("GrossProfit", "USD", "2026-03-02", "2026-05-28", 290.0, "0000999999-26-000098", "10-Q", "Q",
+                        2026, "2026-06-01", "2026-06-01T00:00:00Z", report_period="2026-05-28")
+            self.assertFalse(verify_claim(st, c)["no_quarantined_inputs"])
+            st.close()
+
+
 class LifecycleTests(unittest.TestCase):
     def _claim(self, st, cid, avail, supersedes=None, event="2026-09-03"):
         st.put_candidate({"claim_id": cid, "family": "INVENTORY", "subject": "XMU", "metric": "inventory",

@@ -66,4 +66,25 @@ def verify_claim(store: Store, c: dict) -> dict:
                 q = x["quarterly_cogs"]
                 ok &= (date.fromisoformat(q["end"]) - date.fromisoformat(q["start"])).days + 1 == x["quarter_days"]
         checks["calculation_reproduces"] = bool(ok)
+    if c["family"] == "PRICING_MARGIN" and calc:
+        from datetime import date
+        ok = True
+        for side in ("current", "prior"):
+            x = calc[side]
+            rev, gp, cogs = x["revenue"], x["gross_profit"], x["cogs"]
+            ok &= abs(gp["value"] / rev["value"] - x["margin_unrounded"]) < TOL
+            # revenue and gross profit must cover the same quarter, of the stated length
+            ok &= (rev["start"], rev["end"]) == (gp["start"], gp["end"]) == (x["quarter"]["start"],
+                                                                             x["quarter"]["end"])
+            ok &= (date.fromisoformat(rev["end"]) - date.fromisoformat(rev["start"])).days + 1 == \
+                x["quarter"]["days"]
+            ic = x["identity_check"]
+            if ic["checked"]:
+                residual = rev["value"] - cogs["value"] - gp["value"]
+                ok &= abs(residual - ic["residual"]) < 1e-3 and abs(residual) <= ic["tolerance"]
+        ok &= abs(calc["current"]["margin_unrounded"] - calc["prior"]["margin_unrounded"]
+                  - calc["change"]["result_unrounded"]) < TOL
+        checks["calculation_reproduces"] = bool(ok)
+        checks["identity_checked_both_quarters"] = all(calc[s_]["identity_check"]["checked"]
+                                                       for s_ in ("current", "prior"))
     return checks

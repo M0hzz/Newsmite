@@ -153,6 +153,10 @@ def closure_check(store: Store, ticker: str, family: str, out) -> int:
     if family == "INVENTORY":
         check("all active claims use 'ending-inventory coverage'",
               all("ending-inventory coverage" in c["statement"] for c in active))
+    versions = {"INVENTORY": "inventory_v2", "PRICING_MARGIN": "margin_v2"}
+    if family in versions:
+        check(f"all active claims are {versions[family]} with structured calculation",
+              all((c.get("calculation") or {}).get("version") == versions[family] for c in active))
     for c in active:
         v = verify_claim(store, c)
         ok = all(v.get(k) is True for k in ("calculation_reproduces", "inputs_match_recomputation",

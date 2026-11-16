@@ -121,6 +121,30 @@ def inventory_claims(store: Store, subject: str, as_of: str | None = None) -> in
     return n
 
 
+MARGIN_VERSION = "margin_v2"   # v2: structured unrounded lineage, identity record, full derivation citations
+
+
+def _value_ref(v) -> dict:
+    return {"value": v.val, "concept": v.concept, "start": v.start, "end": v.end, "days": v.days,
+            "method": v.method, "obs_ids": [i["obs_id"] for i in v.inputs]}
+
+
+def _margin_side(r) -> dict:
+    identity = _trusted(r.cogs) and r.cogs.start == r.revenue.start and r.cogs.end == r.revenue.end
+    return {
+        "quarter": {"start": r.revenue.start, "end": r.revenue.end, "days": r.revenue.days},
+        "revenue": _value_ref(r.revenue),
+        "gross_profit": _value_ref(r.gross_profit),
+        "cogs": _value_ref(r.cogs) if identity else None,
+        "identity_check": {
+            "checked": bool(identity), "formula": "revenue - cogs - gross_profit",
+            "residual": (r.revenue.val - r.cogs.val - r.gross_profit.val) if identity else None,
+            "tolerance": periods.AGREE_TOL * r.revenue.val},
+        "formula": "gross_profit / revenue",
+        "margin_unrounded": r.margin,
+    }
+
+
 def margin_claims(store: Store, subject: str, as_of: str | None = None) -> int:
     rows = [r for r in periods.quarter_table(store, as_of) if r.margin_status == periods.TRUSTED]
     n = 0
@@ -132,14 +156,19 @@ def margin_claims(store: Store, subject: str, as_of: str | None = None) -> int:
         stmt = (f"Gross margin {cur.margin:.1%} in quarter ending {cur.end} vs {prev.margin:.1%} prior quarter "
                 f"({delta * 1e4:+.0f} bp); revenue {_b(cur.revenue.val)}"
                 + (" (quarter derived: fiscal-year total minus nine-month YTD)" if derived else ""))
-        used = [cur.revenue, cur.gross_profit] + ([cur.cogs] if _trusted(cur.cogs) else [])
+        if cur.revenue.days != 91 or prev.revenue.days != 91:
+            stmt += f" (quarters of {cur.revenue.days} and {prev.revenue.days} days)"
+        c_side, p_side = _margin_side(cur), _margin_side(prev)
+        used = [cur.revenue, cur.gross_profit, prev.revenue, prev.gross_profit]
+        used += [r.cogs for r, side in ((cur, c_side), (prev, p_side)) if side["cogs"]]
+        calc = {"version": MARGIN_VERSION, "current": c_side, "prior": p_side,
+                "change": {"formula": "current.margin - prior.margin", "result_unrounded": delta,
+                           "basis_points_unrounded": delta * 1e4}}
         n += _propose(store, {
-            "claim_id": "cc_" + short_hash(PRICING_MARGIN, subject, cur.end, round(cur.margin, 6),
-                                           round(prev.margin, 6)),
+            "claim_id": "cc_" + short_hash(MARGIN_VERSION, subject, cur.end, cur.margin, prev.margin),
             "family": PRICING_MARGIN, "subject": subject, "metric": "gross_margin", "statement": stmt,
-            "change": round(delta, 4), "event_time": cur.end,
-            "available_at": max(v.available_at for v in used + [prev.revenue, prev.gross_profit]),
-            "evidence": _value_evidence(store, used + [prev.revenue, prev.gross_profit])})
+            "change": round(delta, 4), "event_time": cur.end, "available_at": max(v.available_at for v in used),
+            "evidence": _value_evidence(store, used), "calculation": calc})
     return n
 
 

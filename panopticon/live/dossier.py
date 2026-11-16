@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 from ..investigations import Investigation
 from ..dossier import power_map
-from .extract import _revenue, quarterly
+from .extract import _revenue, days_of_inventory, quarterly
 from .livegraph import build
 from .store import Store
 
@@ -27,10 +27,10 @@ def metrics_table(store: Store, as_of: str, n: int = 6) -> list[str]:
         r = rev.get(e, {}).get("val")
         g = gp.get(e, {}).get("val")
         i = inv.get(e, {}).get("val")
-        c = cogs.get(e, {}).get("val")
+        c = cogs.get(e)
         first = min(x for x in [rev.get(e, {}).get("accepted_at"), inv.get(e, {}).get("accepted_at")] if x)
         L.append(f"| {e} | {_b(r)} | {f'{g / r:.1%}' if r and g else '—'} | {_b(i)} | "
-                 f"{f'{i / c * 91:.0f}' if i and c else '—'} | {_b(capex.get(e, {}).get('val'))} | {first[:10]} |")
+                 f"{f'{days_of_inventory(i, c):.0f}' if i and c and c['val'] else '—'} | {_b(capex.get(e, {}).get('val'))} | {first[:10]} |")
     return L
 
 

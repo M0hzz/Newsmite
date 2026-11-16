@@ -276,6 +276,16 @@ class LiveAcceptance(unittest.TestCase):
         self.assertTrue(Investigation(g2, "XMU", date(2026, 11, 10)).signals)
 
 
+class QuarterLengthTests(unittest.TestCase):
+    def test_days_of_inventory_uses_actual_quarter_length(self):
+        from panopticon.live.extract import days_of_inventory, quarter_days
+        direct = {"start": "2026-02-27", "end": "2026-05-28", "val": 100.0}
+        long_derived = {"start": "2026-05-28", "end": "2026-09-03", "val": 100.0, "derived": True}
+        self.assertEqual(quarter_days(direct), 91)
+        self.assertEqual(quarter_days(long_derived), 98)   # 53-week fiscal year: 14-week Q4
+        self.assertAlmostEqual(days_of_inventory(100.0, long_derived), 98.0)
+
+
 class IdentityTests(unittest.TestCase):
     def test_contact_required_and_never_persisted(self):
         saved = {k: os.environ.pop(k, None) for k in ("EDGAR_CONTACT_NAME", "EDGAR_CONTACT_EMAIL")}

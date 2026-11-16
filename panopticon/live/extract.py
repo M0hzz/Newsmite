@@ -97,6 +97,17 @@ def _revenue(store: Store, as_of: str | None = None) -> dict[str, dict]:
     return {}
 
 
+def quarter_days(q: dict) -> int:
+    """Actual length of a fiscal quarter. Direct XBRL quarters have an inclusive start date;
+    derived quarters start at the previous period's end date."""
+    d = (date.fromisoformat(q["end"]) - date.fromisoformat(q["start"])).days
+    return d if q.get("derived") else d + 1
+
+
+def days_of_inventory(inventory: float, cogs_q: dict) -> float:
+    return inventory / cogs_q["val"] * quarter_days(cogs_q)
+
+
 # ---------------------------------------------------------------- families
 def inventory_claims(store: Store, subject: str, as_of: str | None = None) -> int:
     inv = store.fact_series("InventoryNet", as_of=as_of, duration="instant")
@@ -108,13 +119,17 @@ def inventory_claims(store: Store, subject: str, as_of: str | None = None) -> in
         chg = cur["val"] / prev["val"] - 1
         stmt = f"Inventory {_b(cur['val'])} at {cur['end']}, {_pct(chg)} vs {prev['end']}"
         rows = [cur, prev]
+        id_parts = [INVENTORY, subject, cur["end"], cur["val"], prev["val"]]
         if cur["end"] in cogs and prev["end"] in cogs and cogs[cur["end"]]["val"] > 0:
-            dio = cur["val"] / cogs[cur["end"]]["val"] * 91
-            dio_prev = prev["val"] / cogs[prev["end"]]["val"] * 91
+            qc, qp = cogs[cur["end"]], cogs[prev["end"]]
+            dio, dio_prev = days_of_inventory(cur["val"], qc), days_of_inventory(prev["val"], qp)
             stmt += f"; days of inventory {dio:.0f} vs {dio_prev:.0f}"
-            rows += cogs[cur["end"]]["rows"] + cogs[prev["end"]]["rows"]
+            if quarter_days(qc) != 91 or quarter_days(qp) != 91:
+                stmt += f" (quarters of {quarter_days(qc)} and {quarter_days(qp)} days)"
+                id_parts.append(f"dio_days={quarter_days(qc)},{quarter_days(qp)}")  # corrected v0.1 formula
+            rows += qc["rows"] + qp["rows"]
         n += _propose(store, {
-            "claim_id": "cc_" + short_hash(INVENTORY, subject, cur["end"], cur["val"], prev["val"]),
+            "claim_id": "cc_" + short_hash(*id_parts),
             "family": INVENTORY, "subject": subject, "metric": "inventory", "statement": stmt, "change": round(chg, 4),
             "event_time": cur["end"], "available_at": cur["accepted_at"], "evidence": _fact_evidence(store, rows)})
     return n

@@ -1,0 +1,999 @@
+{
+ "focal": "MU",
+ "provenance": "DRAFT relationship map. Strengths and confidences are initial estimates, NOT verified against filings. Each edge must be checked (e.g. against the 10-K Item 1, Item 1A, Item 2 and notes) and marked verified with evidence before it can affect OptLab packets.",
+ "entities": [
+  {
+   "id": "MU",
+   "name": "Micron Technology",
+   "type": "Company",
+   "attrs": {
+    "ticker": "MU",
+    "cik": "0000723125",
+    "industry": "semiconductors"
+   }
+  },
+  {
+   "id": "SAMSUNG",
+   "name": "Samsung Electronics (memory)",
+   "type": "Competitor",
+   "attrs": {
+    "listing": "005930.KS"
+   }
+  },
+  {
+   "id": "SKHYNIX",
+   "name": "SK hynix",
+   "type": "Competitor",
+   "attrs": {
+    "listing": "000660.KS"
+   }
+  },
+  {
+   "id": "KIOXIA",
+   "name": "Kioxia Holdings",
+   "type": "Competitor",
+   "attrs": {
+    "listing": "285A.T"
+   }
+  },
+  {
+   "id": "SNDK",
+   "name": "Sandisk",
+   "type": "Competitor",
+   "attrs": {
+    "ticker": "SNDK"
+   }
+  },
+  {
+   "id": "CXMT",
+   "name": "ChangXin Memory Technologies (private)",
+   "type": "Competitor",
+   "attrs": {
+    "private": true
+   }
+  },
+  {
+   "id": "YMTC",
+   "name": "Yangtze Memory Technologies (private)",
+   "type": "Competitor",
+   "attrs": {
+    "private": true
+   }
+  },
+  {
+   "id": "ASML",
+   "name": "ASML Holding",
+   "type": "Supplier",
+   "attrs": {
+    "ticker": "ASML"
+   }
+  },
+  {
+   "id": "AMAT",
+   "name": "Applied Materials",
+   "type": "Supplier",
+   "attrs": {
+    "ticker": "AMAT"
+   }
+  },
+  {
+   "id": "LRCX",
+   "name": "Lam Research",
+   "type": "Supplier",
+   "attrs": {
+    "ticker": "LRCX"
+   }
+  },
+  {
+   "id": "TEL",
+   "name": "Tokyo Electron",
+   "type": "Supplier",
+   "attrs": {
+    "listing": "8035.T"
+   }
+  },
+  {
+   "id": "KLAC",
+   "name": "KLA Corporation",
+   "type": "Supplier",
+   "attrs": {
+    "ticker": "KLAC"
+   }
+  },
+  {
+   "id": "WAFERS",
+   "name": "Silicon wafer suppliers (category)",
+   "type": "Supplier",
+   "attrs": {}
+  },
+  {
+   "id": "NVDA",
+   "name": "NVIDIA (HBM customer)",
+   "type": "Customer",
+   "attrs": {
+    "ticker": "NVDA"
+   }
+  },
+  {
+   "id": "HYPERSCALE",
+   "name": "Cloud / hyperscale data-center buyers (category)",
+   "type": "Customer",
+   "attrs": {}
+  },
+  {
+   "id": "PC_OEM",
+   "name": "PC OEMs (category)",
+   "type": "Customer",
+   "attrs": {}
+  },
+  {
+   "id": "PHONE_OEM",
+   "name": "Smartphone OEMs (category)",
+   "type": "Customer",
+   "attrs": {}
+  },
+  {
+   "id": "AUTO_IND",
+   "name": "Automotive & industrial (category)",
+   "type": "Customer",
+   "attrs": {}
+  },
+  {
+   "id": "BIS",
+   "name": "US Commerce Dept. - Bureau of Industry and Security",
+   "type": "Government agency",
+   "attrs": {
+    "roles": [
+     "gatekeeper",
+     "sanctions_authority"
+    ]
+   }
+  },
+  {
+   "id": "CHIPS_PO",
+   "name": "US Commerce Dept. - CHIPS Program Office",
+   "type": "Government agency",
+   "attrs": {
+    "roles": [
+     "financier",
+     "technology_sponsor"
+    ]
+   }
+  },
+  {
+   "id": "CAC",
+   "name": "Cyberspace Administration of China",
+   "type": "Government agency",
+   "attrs": {
+    "roles": [
+     "gatekeeper"
+    ],
+    "country": "China"
+   }
+  },
+  {
+   "id": "METI",
+   "name": "Japan Ministry of Economy, Trade and Industry",
+   "type": "Government agency",
+   "attrs": {
+    "roles": [
+     "financier"
+    ],
+    "country": "Japan"
+   }
+  },
+  {
+   "id": "NYS",
+   "name": "New York State (economic development)",
+   "type": "Government agency",
+   "attrs": {
+    "roles": [
+     "financier",
+     "landlord"
+    ]
+   }
+  },
+  {
+   "id": "DRAM_PX",
+   "name": "DRAM contract price",
+   "type": "Commodity",
+   "attrs": {}
+  },
+  {
+   "id": "NAND_PX",
+   "name": "NAND contract price",
+   "type": "Commodity",
+   "attrs": {}
+  },
+  {
+   "id": "TAIWAN",
+   "name": "Taiwan DRAM fabs (Taichung / Taoyuan)",
+   "type": "Region",
+   "attrs": {
+    "geo_concentration": 0.7,
+    "chokepoint": true
+   }
+  },
+  {
+   "id": "HIROSHIMA",
+   "name": "Hiroshima, Japan fab",
+   "type": "Region",
+   "attrs": {}
+  },
+  {
+   "id": "SINGAPORE",
+   "name": "Singapore NAND fabs",
+   "type": "Region",
+   "attrs": {}
+  },
+  {
+   "id": "IDAHO",
+   "name": "Boise, Idaho fab project",
+   "type": "Region",
+   "attrs": {}
+  },
+  {
+   "id": "CLAY_NY",
+   "name": "Clay, New York megafab project",
+   "type": "Region",
+   "attrs": {}
+  },
+  {
+   "id": "XIAN",
+   "name": "Xi'an, China assembly & test",
+   "type": "Region",
+   "attrs": {}
+  }
+ ],
+ "edges": [
+  {
+   "id": "mu_e000",
+   "source": "MU",
+   "relationship": "EXPOSED_TO",
+   "target": "DRAM_PX",
+   "strength": 0.8,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "gross_margin",
+    "revenue"
+   ],
+   "lag_days": 30,
+   "clock": "business",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": ""
+  },
+  {
+   "id": "mu_e001",
+   "source": "MU",
+   "relationship": "EXPOSED_TO",
+   "target": "NAND_PX",
+   "strength": 0.4,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "gross_margin",
+    "revenue"
+   ],
+   "lag_days": 30,
+   "clock": "business",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": ""
+  },
+  {
+   "id": "mu_e002",
+   "source": "SAMSUNG",
+   "relationship": "COMPETES_WITH",
+   "target": "MU",
+   "strength": 0.5,
+   "direction": "negative_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "revenue"
+   ],
+   "lag_days": 90,
+   "clock": "business",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": ""
+  },
+  {
+   "id": "mu_e003",
+   "source": "SKHYNIX",
+   "relationship": "COMPETES_WITH",
+   "target": "MU",
+   "strength": 0.5,
+   "direction": "negative_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "revenue"
+   ],
+   "lag_days": 90,
+   "clock": "business",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": "HBM share competition"
+  },
+  {
+   "id": "mu_e004",
+   "source": "KIOXIA",
+   "relationship": "COMPETES_WITH",
+   "target": "MU",
+   "strength": 0.2,
+   "direction": "negative_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "revenue"
+   ],
+   "lag_days": 90,
+   "clock": "business",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": "NAND"
+  },
+  {
+   "id": "mu_e005",
+   "source": "SNDK",
+   "relationship": "COMPETES_WITH",
+   "target": "MU",
+   "strength": 0.2,
+   "direction": "negative_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "revenue"
+   ],
+   "lag_days": 90,
+   "clock": "business",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": "NAND"
+  },
+  {
+   "id": "mu_e006",
+   "source": "CXMT",
+   "relationship": "COMPETES_WITH",
+   "target": "MU",
+   "strength": 0.2,
+   "direction": "negative_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "revenue"
+   ],
+   "lag_days": 180,
+   "clock": "structural",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": "China DRAM capacity"
+  },
+  {
+   "id": "mu_e007",
+   "source": "YMTC",
+   "relationship": "COMPETES_WITH",
+   "target": "MU",
+   "strength": 0.1,
+   "direction": "negative_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "revenue"
+   ],
+   "lag_days": 180,
+   "clock": "structural",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": "China NAND capacity"
+  },
+  {
+   "id": "mu_e008",
+   "source": "ASML",
+   "relationship": "SUPPLIES",
+   "target": "MU",
+   "strength": 0.4,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "supply",
+    "capex"
+   ],
+   "lag_days": 180,
+   "clock": "business",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": "EUV/DUV lithography"
+  },
+  {
+   "id": "mu_e009",
+   "source": "AMAT",
+   "relationship": "SUPPLIES",
+   "target": "MU",
+   "strength": 0.35,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "supply",
+    "capex"
+   ],
+   "lag_days": 120,
+   "clock": "business",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": ""
+  },
+  {
+   "id": "mu_e010",
+   "source": "LRCX",
+   "relationship": "SUPPLIES",
+   "target": "MU",
+   "strength": 0.35,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "supply",
+    "capex"
+   ],
+   "lag_days": 120,
+   "clock": "business",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": ""
+  },
+  {
+   "id": "mu_e011",
+   "source": "TEL",
+   "relationship": "SUPPLIES",
+   "target": "MU",
+   "strength": 0.3,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "supply",
+    "capex"
+   ],
+   "lag_days": 120,
+   "clock": "business",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": ""
+  },
+  {
+   "id": "mu_e012",
+   "source": "KLAC",
+   "relationship": "SUPPLIES",
+   "target": "MU",
+   "strength": 0.2,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "supply"
+   ],
+   "lag_days": 120,
+   "clock": "business",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": ""
+  },
+  {
+   "id": "mu_e013",
+   "source": "WAFERS",
+   "relationship": "SUPPLIES",
+   "target": "MU",
+   "strength": 0.2,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "supply",
+    "gross_margin"
+   ],
+   "lag_days": 90,
+   "clock": "business",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": ""
+  },
+  {
+   "id": "mu_e014",
+   "source": "MU",
+   "relationship": "BUYS_FROM",
+   "target": "ASML",
+   "strength": 0.15,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "revenue"
+   ],
+   "lag_days": 180,
+   "clock": "business",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": "MU capex -> equipment orders"
+  },
+  {
+   "id": "mu_e015",
+   "source": "MU",
+   "relationship": "BUYS_FROM",
+   "target": "AMAT",
+   "strength": 0.15,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "revenue"
+   ],
+   "lag_days": 120,
+   "clock": "business",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": ""
+  },
+  {
+   "id": "mu_e016",
+   "source": "MU",
+   "relationship": "BUYS_FROM",
+   "target": "LRCX",
+   "strength": 0.15,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "revenue"
+   ],
+   "lag_days": 120,
+   "clock": "business",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": ""
+  },
+  {
+   "id": "mu_e017",
+   "source": "NVDA",
+   "relationship": "BUYS_FROM",
+   "target": "MU",
+   "strength": 0.3,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "demand",
+    "revenue"
+   ],
+   "lag_days": 90,
+   "clock": "business",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": "HBM"
+  },
+  {
+   "id": "mu_e018",
+   "source": "HYPERSCALE",
+   "relationship": "BUYS_FROM",
+   "target": "MU",
+   "strength": 0.45,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "demand",
+    "revenue"
+   ],
+   "lag_days": 90,
+   "clock": "business",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": "server DRAM / SSD"
+  },
+  {
+   "id": "mu_e019",
+   "source": "PC_OEM",
+   "relationship": "BUYS_FROM",
+   "target": "MU",
+   "strength": 0.2,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "demand",
+    "revenue"
+   ],
+   "lag_days": 90,
+   "clock": "business",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": ""
+  },
+  {
+   "id": "mu_e020",
+   "source": "PHONE_OEM",
+   "relationship": "BUYS_FROM",
+   "target": "MU",
+   "strength": 0.2,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "demand",
+    "revenue"
+   ],
+   "lag_days": 90,
+   "clock": "business",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": ""
+  },
+  {
+   "id": "mu_e021",
+   "source": "AUTO_IND",
+   "relationship": "BUYS_FROM",
+   "target": "MU",
+   "strength": 0.1,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "demand",
+    "revenue"
+   ],
+   "lag_days": 120,
+   "clock": "business",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": ""
+  },
+  {
+   "id": "mu_e022",
+   "source": "BIS",
+   "relationship": "REGULATES",
+   "target": "MU",
+   "strength": 0.25,
+   "direction": "negative_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "revenue"
+   ],
+   "lag_days": 30,
+   "clock": "business",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": "export controls on China sales / equipment"
+  },
+  {
+   "id": "mu_e023",
+   "source": "CAC",
+   "relationship": "REGULATES",
+   "target": "MU",
+   "strength": 0.1,
+   "direction": "negative_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "revenue"
+   ],
+   "lag_days": 30,
+   "clock": "structural",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": "2023 CAC review restricting MU in critical infrastructure"
+  },
+  {
+   "id": "mu_e024",
+   "source": "CHIPS_PO",
+   "relationship": "SUBSIDIZES",
+   "target": "MU",
+   "strength": 0.2,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "capex"
+   ],
+   "lag_days": 365,
+   "clock": "structural",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": "CHIPS Act award for US fabs"
+  },
+  {
+   "id": "mu_e025",
+   "source": "METI",
+   "relationship": "SUBSIDIZES",
+   "target": "MU",
+   "strength": 0.1,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "capex"
+   ],
+   "lag_days": 365,
+   "clock": "structural",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": "Hiroshima subsidies"
+  },
+  {
+   "id": "mu_e026",
+   "source": "NYS",
+   "relationship": "SUBSIDIZES",
+   "target": "MU",
+   "strength": 0.1,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "capex"
+   ],
+   "lag_days": 365,
+   "clock": "structural",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": "Clay NY incentives"
+  },
+  {
+   "id": "mu_e027",
+   "source": "MU",
+   "relationship": "DEPENDS_ON",
+   "target": "TAIWAN",
+   "strength": 0.6,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "supply"
+   ],
+   "lag_days": 0,
+   "clock": "structural",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": "share of DRAM output"
+  },
+  {
+   "id": "mu_e028",
+   "source": "MU",
+   "relationship": "DEPENDS_ON",
+   "target": "HIROSHIMA",
+   "strength": 0.25,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "supply"
+   ],
+   "lag_days": 0,
+   "clock": "structural",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": ""
+  },
+  {
+   "id": "mu_e029",
+   "source": "MU",
+   "relationship": "DEPENDS_ON",
+   "target": "SINGAPORE",
+   "strength": 0.3,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "supply"
+   ],
+   "lag_days": 0,
+   "clock": "structural",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": ""
+  },
+  {
+   "id": "mu_e030",
+   "source": "MU",
+   "relationship": "DEPENDS_ON",
+   "target": "IDAHO",
+   "strength": 0.15,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "supply",
+    "capex"
+   ],
+   "lag_days": 0,
+   "clock": "structural",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": ""
+  },
+  {
+   "id": "mu_e031",
+   "source": "MU",
+   "relationship": "DEPENDS_ON",
+   "target": "CLAY_NY",
+   "strength": 0.1,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "supply",
+    "capex"
+   ],
+   "lag_days": 0,
+   "clock": "structural",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": ""
+  },
+  {
+   "id": "mu_e032",
+   "source": "MU",
+   "relationship": "DEPENDS_ON",
+   "target": "XIAN",
+   "strength": 0.1,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "supply"
+   ],
+   "lag_days": 0,
+   "clock": "structural",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": ""
+  },
+  {
+   "id": "mu_e033",
+   "source": "SAMSUNG",
+   "relationship": "EXPOSED_TO",
+   "target": "DRAM_PX",
+   "strength": 0.5,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "revenue"
+   ],
+   "lag_days": 30,
+   "clock": "business",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": ""
+  },
+  {
+   "id": "mu_e034",
+   "source": "SKHYNIX",
+   "relationship": "EXPOSED_TO",
+   "target": "DRAM_PX",
+   "strength": 0.6,
+   "direction": "positive_dependency",
+   "confidence": 0.5,
+   "metrics": [
+    "revenue"
+   ],
+   "lag_days": 30,
+   "clock": "business",
+   "effective_from": "2024-01-01",
+   "recorded_at": "2026-11-16",
+   "verified": false,
+   "verified_by": null,
+   "verified_at": null,
+   "evidence": [],
+   "notes": ""
+  }
+ ]
+}

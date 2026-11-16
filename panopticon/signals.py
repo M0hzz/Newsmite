@@ -159,7 +159,8 @@ def packets_from_cone(g: PowerGraph, cone: Cone, feedback: FeedbackRegistry | No
 
     out = []
     for fam, sps in groups.items():
-        usable = [s for s in sps if s.claim.status not in ("narrative_only", "disputed")]
+        # Gates: no news-only or disputed claims, and no path through an unverified relationship.
+        usable = [s for s in sps if s.claim.status not in ("narrative_only", "disputed") and s.path.verified]
         if not usable:
             continue  # news-only (or disputed-only) hypotheses never reach OptLab
         net = sum(s.influence for s in usable)
@@ -232,6 +233,8 @@ def packets_from_contradictions(g: PowerGraph, ticker: str, cxs: list[Contradict
     out = []
     ent = next(e for e in g.entities.values() if e.attrs.get("ticker") == ticker)
     for cx in cxs:
+        if cx.uses_unverified_edges:
+            continue  # an unverified relationship cannot produce an OptLab packet
         stype = f"CONTRADICTION_{cx.kind.upper()}"
         prior = feedback.get(stype, ent.attrs.get("industry", "*"))
         assumption = next((a for a in g.assumptions.values() if a.security == ticker

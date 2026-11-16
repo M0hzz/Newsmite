@@ -76,3 +76,41 @@ A signed `change` at a node means: **activity or health** for companies and regi
 - Shock propagation adds path effects and saturates them with `tanh`. Overlapping paths are not modelled as properly dependent.
 - Contradiction classes depend on assumptions being entered (`MarketAssumption`). Extracting them automatically from guidance and consensus data is future work.
 - The UI is a thin stdlib server for one user. There is no auth and no persistence beyond the JSONL ledger.
+
+## Live pipeline: Micron (MU) from SEC EDGAR
+
+The first live slice. It connects **SEC filings only**, and every live claim must be **approved by a person** before it counts:
+
+```
+EDGAR document → immutable raw evidence → candidate claim → human verification → active graph state → dossier
+```
+
+**Setup.** The SEC requires a contact name and email in the User-Agent. Supply them only as environment variables. They are never written to disk, logs or the repo:
+
+```bash
+export EDGAR_CONTACT_NAME="Your Name"
+export EDGAR_CONTACT_EMAIL="you+panopticon@example.com"
+```
+
+**Workflow**
+
+```bash
+python3 -m panopticon live ingest MU --since 2025-06-01   # filings + XBRL facts -> candidate claims
+python3 -m panopticon live status
+python3 -m panopticon live review --family INVENTORY      # list pending candidates
+python3 -m panopticon live show <claim_id>                # full evidence trail + history
+python3 -m panopticon live approve <claim_id> --by "Your Name" --note "checked against 10-Q"
+python3 -m panopticon live reject  <claim_id> --by "Your Name" --note "wrong comparison period"
+python3 -m panopticon live rel list                       # draft relationship map (all unverified)
+python3 -m panopticon live rel verify mu_e000 --by "Your Name" --evidence "10-K FY2026 Item 1A, p.NN"
+python3 -m panopticon live dossier MU > MU_dossier.md
+python3 -m panopticon live signals MU                     # empty until approved claims sit on verified edges
+```
+
+Data is stored in `data/live/` (git-ignored): a SQLite DB plus raw filings named by their sha256 hash. Re-running `ingest` is safe, because filings that are already stored are never downloaded again.
+
+**Claim families:** `INVENTORY` (level, QoQ change, days of inventory), `PRICING_MARGIN` (gross margin), `CAPACITY_CAPEX` (quarterly capex, with Q4 and mid-year quarters derived from year-to-date figures and labelled as derived), `GEO_REGULATORY` (10-K passages on China/CAC, export controls, the CHIPS Act, tariffs, Taiwan/Japan and customer concentration; identical wording across years is one claim, changed wording is a new one), `INSIDER` (Form 4s classified into open-market sale or purchase, grant, tax withholding, option exercise and gift, with the 10b5-1 plan flag; only discretionary open-market trades carry signal), and `CORPORATE_EVENT` (selected 8-K items).
+
+**Acceptance tests** (`tests/test_live.py`, offline). Each of the 10 criteria has its own test: no duplicates on re-run; full provenance kept (accession, acceptance time, period, form, URL, hash); amendments never erase originals; filing time is kept separate from the economic period; Form 4 classification; repeated facts aren't double-counted, and a repeat doesn't shift when a fact first became known; restatements supersede older claims without deleting them; extraction never confirms a claim; replay hides documents not yet filed; unverified edges can't produce packets. A further test checks that the contact email is never persisted.
+
+**Known gaps** (beyond the one-day slice): XBRL evidence cites the tagged fact (concept, period and accession) rather than the exact inline-XBRL element; text extraction uses keyword patterns, not a trained extractor; companyfacts excludes dimensional (segment and geographic) data; only the recent-filings window of the submissions API is read; insider claims are made per filing, not aggregated per insider; the relationship map in `data/relationships/MU.json` is an unverified draft.

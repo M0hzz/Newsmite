@@ -406,7 +406,8 @@ def build() -> PowerGraph:
     for i, (s, rel, t, st, dr, cf, metrics, lag, clock) in enumerate(EDGES):
         g.add_edge(Edge(s, rel, t, effective_from=D(2025, 1, 1), effective_to=None, strength=st, direction=dr,
                         confidence=cf, evidence_ids=[f"ev_rel_{i:03d}"], last_verified=D(2026, 10, 1),
-                        lag_days=lag, affected_metrics=metrics, clock=clock, recorded_at=D(2025, 1, 15)))
+                        lag_days=lag, affected_metrics=metrics, clock=clock, recorded_at=D(2025, 1, 15),
+                        verified=True, verified_by="demo"))
     evs = [Evidence(id=i, source_type=st, tier=tier, published=_dt(pub), url=None, origin=origin, claim_key=key,
                     polarity=pol, origin_root=root, excerpt=ex)
            for i, st, tier, pub, origin, key, pol, root, ex in EVIDENCE]

@@ -66,6 +66,10 @@ class Path:
         return sum(h.edge.lag_days for h in self.hops)
 
     @property
+    def verified(self) -> bool:
+        return all(h.edge.verified for h in self.hops)
+
+    @property
     def potential(self) -> float:
         return self.E * self.edge_confidence
 

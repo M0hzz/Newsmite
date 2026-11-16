@@ -45,7 +45,12 @@ def main(argv: list[str] | None = None) -> int:
     sv.add_argument("--port", type=int, default=8000)
     sv.add_argument("--host", default="127.0.0.1")
     sub.add_parser("graph")
+    from .live.cli import add_parser as add_live
+    add_live(sub)
     args = ap.parse_args(argv)
+    if args.cmd == "live":
+        from .live.cli import run as run_live
+        return run_live(args)
 
     as_of = date.fromisoformat(args.as_of)
     g = seed.build()

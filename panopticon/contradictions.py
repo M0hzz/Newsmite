@@ -50,19 +50,20 @@ def _ticker_entity(g: PowerGraph, ticker: str) -> str | None:
     return None
 
 
-def _observations(g: PowerGraph, cone: Cone, metric: str) -> list[tuple[Claim, float, float, str, int]]:
-    """(claim, signed implication for focal metric, weight, description, lag_days)."""
+def _observations(g: PowerGraph, cone: Cone, metric: str) -> list[tuple[Claim, float, float, str, int, bool]]:
+    """(claim, signed implication for focal metric, weight, description, lag_days, all_edges_verified)."""
     obs = []
     for c in g.claims_about(cone.focal, cone.as_of):
-        if c.metric == metric and c.status != "narrative_only":
+        if c.metric == metric and c.status != "narrative_only" and c.change != 0:
             obs.append((c, math.copysign(1, c.change), c.evidence_quality * temporal_factor(c, cone.as_of),
-                        c.claim, 0))
+                        c.claim, 0, True))
     for sp in cone.scored:
         if metric not in sp.path.metrics() or sp.claim.status == "narrative_only" or sp.influence == 0:
             continue
         w = sp.C * sp.T * min(1.0, max(0.25, abs(sp.E * sp.M) * 5))
         via = " -> ".join(g.name(n) for n in sp.path.nodes)
-        obs.append((sp.claim, math.copysign(1, sp.influence), w, f"{sp.claim.claim} [{via}]", sp.path.lag_days))
+        obs.append((sp.claim, math.copysign(1, sp.influence), w, f"{sp.claim.claim} [{via}]", sp.path.lag_days,
+                    sp.path.verified))
     return obs
 
 
@@ -91,6 +92,7 @@ def assumption_vs_evidence(g: PowerGraph, a: MarketAssumption, cone: Cone) -> Co
         affected_metrics=metrics,
         candidate_securities=[a.security],
         observation_claim_ids=sorted(against),
+        uses_unverified_edges=not all(o[5] for o in against.values()),
     )
 
 

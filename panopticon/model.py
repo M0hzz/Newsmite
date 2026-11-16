@@ -180,6 +180,10 @@ class Edge:
     # Bitemporal: when the relationship was true (effective_*) vs. when *we knew it* (recorded_at).
     # Point-in-time queries require both, so backtests never see relationships discovered later.
     recorded_at: date | None = None
+    # Human verification gate. Unverified edges are shown in dossiers but can never carry an
+    # OptLab packet (signals.py) or a packet-producing contradiction.
+    verified: bool = False
+    verified_by: str | None = None
 
     def active(self, as_of: date) -> bool:
         known = self.recorded_at is None or self.recorded_at <= as_of
@@ -204,6 +208,7 @@ class Edge:
             "recorded_at": (self.recorded_at or self.effective_from).isoformat(),
             "lag_days": self.lag_days,
             "affected_metrics": self.affected_metrics,
+            "verified": self.verified,
         }
 
 
@@ -286,6 +291,7 @@ class Contradiction:
     candidate_securities: list[str]
     kind: str = "assumption_vs_observation"
     observation_claim_ids: list[str] = field(default_factory=list)
+    uses_unverified_edges: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {

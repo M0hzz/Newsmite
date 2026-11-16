@@ -50,8 +50,9 @@ def add_parser(sub) -> None:
     p = ls.add_parser("review")
     p.add_argument("ticker", nargs="?", help="optional; claims are filtered to this subject")
     p.add_argument("--family")
-    p.add_argument("--limit", type=int, default=25)
-    p.add_argument("--status", default="pending")
+    p.add_argument("--limit", type=int, default=None, help="text default 25; json default all")
+    p.add_argument("--status", default="pending", help="pending | approved | rejected | all")
+    p.add_argument("--format", choices=("text", "json"), default="text")
     p = ls.add_parser("show")
     p.add_argument("claim_id")
     for name in ("approve", "reject"):
@@ -91,6 +92,30 @@ def add_parser(sub) -> None:
     p.add_argument("--by", required=True)
 
 
+def review_packet(store: Store, rows: list[dict], args) -> dict:
+    """Claims with full evidence, history and mechanical review checks (checks inform; they never approve)."""
+    claims = []
+    for r in rows:
+        ev = r["evidence"]
+        latest_input = max((e.get("accepted_at") or "" for e in ev), default="")
+        facts = [e for e in ev if e.get("type") == "xbrl_fact"]
+        checks = {
+            "available_at_equals_latest_input": r["available_at"] == latest_input if ev else None,
+            "all_inputs_public_by_available_at": all((e.get("accepted_at") or "") <= r["available_at"] for e in ev),
+            "evidence_count": len(ev),
+            "fact_classes": sorted({e.get("class") or "?" for e in facts}) if facts else None,
+            "derivations": sorted({f"{e['derivation']['metric']} {e['derivation']['period_end']}: "
+                                   f"{e['derivation']['method']}" for e in facts if e.get("derivation")}) or None,
+            "every_fact_has_context": all(e.get("obs_id") and e.get("accession") and e.get("end") for e in facts)
+            if facts else None,
+            "supersedes": r.get("supersedes"),
+        }
+        claims.append({**r, "history": [dict(h) for h in store.history(r["claim_id"])], "checks": checks})
+    return {"generated_at": _now(), "filters": {"ticker": args.ticker, "family": args.family,
+                                                 "status": args.status}, "count": len(claims), "claims": claims,
+            "note": "Checks are mechanical aids. Approval requires a human decision: live approve <id> --by NAME."}
+
+
 def run(args) -> int:
     store = Store(args.data)
     out = sys.stdout
@@ -104,8 +129,14 @@ def run(args) -> int:
     elif c == "status":
         out.write(json.dumps(store.stats(), indent=2) + "\n")
     elif c == "review":
-        rows = [r for r in store.claims(status=args.status) if (not args.family or r["family"] == args.family)
+        rows = [r for r in store.claims(status=None if args.status == "all" else args.status)
+                if (not args.family or r["family"] == args.family)
                 and (not args.ticker or r["subject"] == args.ticker.upper())]
+        if args.format == "json":
+            rows = rows[: args.limit] if args.limit else rows
+            out.write(json.dumps(review_packet(store, rows, args), indent=2) + "\n")
+            return 0
+        args.limit = args.limit or 25
         for r in rows[: args.limit]:
             out.write(f"{r['claim_id']}  {r['family']:<15} {r['event_time'][:10]}  {r['statement'][:150]}\n")
         out.write(f"-- {len(rows)} {args.status} claim(s)" + (f", showing {args.limit}" if len(rows) > args.limit

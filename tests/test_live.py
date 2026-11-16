@@ -276,6 +276,30 @@ class LiveAcceptance(unittest.TestCase):
         self.assertTrue(Investigation(g2, "XMU", date(2026, 11, 10)).signals)
 
 
+class ReviewExportTests(unittest.TestCase):
+    def test_review_json_export(self):
+        import io
+        from contextlib import redirect_stdout
+        from panopticon.cli import main
+        with tempfile.TemporaryDirectory() as d:
+            st = Store(d)
+            ingest(st, EdgarClient(transport=FakeSEC()), "XMU", "2026-01-01")
+            extract_all(st, "XMU")
+            st.close()
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                rc = main(["live", "--data", d, "review", "XMU", "--family", "INVENTORY", "--format", "json"])
+            self.assertEqual(rc, 0)
+            pkt = json.loads(buf.getvalue())
+            self.assertEqual(pkt["count"], len(pkt["claims"]))
+            self.assertTrue(pkt["claims"])
+            c = pkt["claims"][0]
+            self.assertEqual(c["status"], "pending")
+            self.assertTrue(c["checks"]["available_at_equals_latest_input"])
+            self.assertTrue(c["checks"]["every_fact_has_context"])
+            self.assertEqual(c["history"][0]["action"], "proposed")
+
+
 class QuarterLengthTests(unittest.TestCase):
     def test_days_of_inventory_uses_actual_quarter_length(self):
         from panopticon.live.periods import Value

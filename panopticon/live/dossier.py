@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 from ..investigations import Investigation
 from ..dossier import power_map
-from .extract import _revenue, days_of_inventory, quarterly
+from . import periods
 from .livegraph import build
 from .store import Store
 
@@ -16,21 +16,29 @@ def _b(x: float | None) -> str:
 
 
 def metrics_table(store: Store, as_of: str, n: int = 6) -> list[str]:
-    rev, gp = _revenue(store, as_of), quarterly(store, "GrossProfit", as_of)
-    cogs = quarterly(store, "CostOfGoodsAndServicesSold", as_of)
-    capex = quarterly(store, "PaymentsToAcquirePropertyPlantAndEquipment", as_of)
-    inv = {r["end"]: r for r in store.fact_series("InventoryNet", as_of=as_of, duration="instant")}
-    ends = sorted(set(rev) | set(inv))[-n:]
+    """Only TRUSTED values are shown; quarantined cells say so. Every number cites its fact contexts."""
+    rows = periods.quarter_table(store, as_of)[-n:]
     L = ["| Quarter end | Revenue | Gross margin | Inventory | Days of inventory | Capex | First public |",
          "|---|---:|---:|---:|---:|---:|---|"]
-    for e in ends:
-        r = rev.get(e, {}).get("val")
-        g = gp.get(e, {}).get("val")
-        i = inv.get(e, {}).get("val")
-        c = cogs.get(e)
-        first = min(x for x in [rev.get(e, {}).get("accepted_at"), inv.get(e, {}).get("accepted_at")] if x)
-        L.append(f"| {e} | {_b(r)} | {f'{g / r:.1%}' if r and g else '—'} | {_b(i)} | "
-                 f"{f'{days_of_inventory(i, c):.0f}' if i and c and c['val'] else '—'} | {_b(capex.get(e, {}).get('val'))} | {first[:10]} |")
+    notes: list[str] = []
+
+    def cell(v, fmt) -> str:
+        if v is None:
+            return "—"
+        if v.status != periods.TRUSTED:
+            return "QUARANTINED"
+        notes.append(f"{v.concept} {v.end} [{v.method}]: " + "; ".join(
+            f"{i['accession']} {i['start'] or 'instant'}..{i['end']} = {i['val']:,.0f} (obs {i['obs_id']})"
+            for i in v.inputs))
+        return f"{fmt(v.val)}[^{len(notes)}]"
+
+    for r in rows:
+        firsts = [v.available_at for v in (r.revenue, r.inventory) if v is not None and v.available_at]
+        L.append(f"| {r.end} | {cell(r.revenue, _b)} | "
+                 f"{f'{r.margin:.1%}' if r.margin_status == periods.TRUSTED else 'QUARANTINED'} | "
+                 f"{cell(r.inventory, _b)} | {f'{r.dio:.0f}' if r.dio is not None else '—'} | "
+                 f"{cell(r.capex, _b)} | {min(firsts)[:10] if firsts else '—'} |")
+    L += [""] + [f"[^{k}]: {t}" for k, t in enumerate(notes, 1)]
     return L
 
 
@@ -47,7 +55,10 @@ def render(store: Store, relationships: dict, ticker: str, as_of: str) -> str:
          "> Only **human-approved** claims below are part of the graph state. Relationship edges marked "
          "*unverified* are drafts: they are shown for orientation and cannot produce OptLab packets.", ""]
 
-    L += ["## Reported fundamentals (XBRL, point-in-time)", ""] + metrics_table(store, as_of) + [""]
+    L += ["## Reported fundamentals (XBRL, point-in-time, normalized)", "",
+          "_Quarter flows are direct quarterly contexts or cumulative differences (Q4 = FY − 9M); inventory is the "
+          "balance on the reporting date. Values failing a validation rule are shown as QUARANTINED. "
+          "Full lineage: `python3 -m panopticon live audit MU`._", ""] + metrics_table(store, as_of) + [""]
 
     L += ["## Approved claims (active graph state)", ""]
     if not active:

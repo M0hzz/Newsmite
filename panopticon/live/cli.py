@@ -60,6 +60,13 @@ def add_parser(sub) -> None:
     p = ls.add_parser("dossier")
     p.add_argument("ticker")
     p.add_argument("--as-of", default=None)
+    p = ls.add_parser("audit", help="every displayed number with its SEC fact contexts")
+    p.add_argument("ticker")
+    p.add_argument("--periods", help="comma-separated quarter ends, e.g. 2025-05-29,2026-05-28")
+    p.add_argument("--as-of", default=None)
+    p = ls.add_parser("reconcile", help="find each input fact's value in the filed statement text")
+    p.add_argument("ticker")
+    p.add_argument("--as-of", default=None)
     p = ls.add_parser("signals")
     p.add_argument("ticker")
     p.add_argument("--as-of", default=None)
@@ -120,6 +127,20 @@ def run(args) -> int:
     elif c == "dossier":
         rel = load_relationships(REL_DIR / f"{args.ticker.upper()}.json")
         out.write(live_dossier.render(store, rel, args.ticker.upper(), args.as_of or _now()) + "\n")
+    elif c == "audit":
+        from .audit import render_audit, table_fingerprint
+        out.write(render_audit(store, args.as_of, args.periods.split(",") if args.periods else None) + "\n")
+        out.write(f"\ntable fingerprint: {table_fingerprint(store, args.as_of)}\n")
+    elif c == "reconcile":
+        from .audit import reconcile
+        rows = reconcile(store, args.as_of)
+        for r in rows:
+            flag = {True: "FOUND  ", False: "MISSING", None: "n/a    "}[r["found_in_filing"]]
+            out.write(f"{flag} {r['metric']:<18} {r['quarter_end']}  {r['value_millions']:>9}M  {r['accession']}  "
+                      f"{r['fact']}  | {r['context']}\n")
+        bad = [r for r in rows if r["found_in_filing"] is False]
+        out.write(f"-- {len(rows)} input facts checked, {len(bad)} not found in their filing text\n")
+        return 1 if bad else 0
     elif c == "signals":
         rel = load_relationships(REL_DIR / f"{args.ticker.upper()}.json")
         as_of = args.as_of or _now()

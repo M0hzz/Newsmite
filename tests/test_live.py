@@ -278,12 +278,11 @@ class LiveAcceptance(unittest.TestCase):
 
 class QuarterLengthTests(unittest.TestCase):
     def test_days_of_inventory_uses_actual_quarter_length(self):
-        from panopticon.live.extract import days_of_inventory, quarter_days
-        direct = {"start": "2026-02-27", "end": "2026-05-28", "val": 100.0}
-        long_derived = {"start": "2026-05-28", "end": "2026-09-03", "val": 100.0, "derived": True}
-        self.assertEqual(quarter_days(direct), 91)
-        self.assertEqual(quarter_days(long_derived), 98)   # 53-week fiscal year: 14-week Q4
-        self.assertAlmostEqual(days_of_inventory(100.0, long_derived), 98.0)
+        from panopticon.live.periods import Value
+        direct = Value("C", "USD", "2026-02-27", "2026-05-28", 100.0, "direct", [])
+        q4 = Value("C", "USD", "2026-05-29", "2026-09-03", 100.0, "ytd_diff", [])  # 53-week year: 14-week Q4
+        self.assertEqual(direct.days, 91)
+        self.assertEqual(q4.days, 98)
 
 
 class IdentityTests(unittest.TestCase):

@@ -114,3 +114,28 @@ Data is stored in `data/live/` (git-ignored): a SQLite DB plus raw filings named
 **Acceptance tests** (`tests/test_live.py`, offline). Each of the 10 criteria has its own test: no duplicates on re-run; full provenance kept (accession, acceptance time, period, form, URL, hash); amendments never erase originals; filing time is kept separate from the economic period; Form 4 classification; repeated facts aren't double-counted, and a repeat doesn't shift when a fact first became known; restatements supersede older claims without deleting them; extraction never confirms a claim; replay hides documents not yet filed; unverified edges can't produce packets. A further test checks that the contact email is never persisted.
 
 **Known gaps** (beyond the one-day slice): XBRL evidence cites the tagged fact (concept, period and accession) rather than the exact inline-XBRL element; text extraction uses keyword patterns, not a trained extractor; companyfacts excludes dimensional (segment and geographic) data; only the recent-filings window of the submissions API is read; insider claims are made per filing, not aggregated per insider; the relationship map in `data/relationships/MU.json` is an unverified draft.
+
+### XBRL period normalization and audit
+
+Every XBRL observation is classified **from its dates** as `INSTANT`, `DIRECT_QUARTER`, `YEAR_TO_DATE`, `FISCAL_YEAR`, `COMPARATIVE` or `UNKNOWN` (`panopticon/live/periods.py`). SEC's `fy`/`fp` fields describe the *filing*, not the fact, so they are recorded but never used to classify. Quarter flows are a direct quarterly context (preferred, and cross-checked) or a cumulative difference (Q2 = 6M − Q1, Q3 = 9M − 6M, Q4 = FY − 9M). Inventory is the instant balance on a reporting-period end.
+
+A value is **quarantined** (kept as evidence, but producing no claim, signal or trusted table cell) when: other units are present for the same context (they are ignored rather than mixed in), several incompatible contexts exist for one period, a derivation input is missing, a derived flow is negative, the direct and derived values disagree by more than 0.5%, revenue and gross profit cover different periods, revenue − COGS − gross profit is off by more than 0.5% of revenue, or two revenue concepts report materially different values for the same quarter. When both revenue concepts agree, the primary concept is used and both are kept as lineage.
+
+Every displayed number links to its fact contexts. That includes computed cells: gross margin and days of inventory carry their formula with the actual operands (e.g. `Gross margin = gross profit 35,056 / revenue 41,456 ($M) = 84.5639%`) plus every input observation.
+
+```bash
+python3 -m panopticon live audit MU --periods 2025-05-29,2026-05-28,2026-09-03   # full lineage per number
+python3 -m panopticon live source-check MU --periods 2026-05-28                  # numeric source-presence check
+```
+
+`source-check` (alias `reconcile`) is a **numeric source-presence check with proximity rules, not statement reconciliation**. For each input fact it looks for the value as filed (in $ millions, parentheses for cash outflows) in the reporting filing's text and grades the best occurrence:
+
+| Grade | Meaning |
+|---|---|
+| `STATEMENT_LINE_MATCH` | under a consolidated-statement heading, right after the expected line-item label, with the period's column date earlier in that statement, in a filing stated in millions |
+| `LINE_ITEM_MATCH` | label and date nearby, but not under a statement heading (e.g. an MD&A table) |
+| `LABEL_ONLY` / `NUMBER_ONLY` / `MISSING` | progressively weaker; it exits 1 if anything is `MISSING` |
+
+If the original filing predates the ingest window, the check falls back to a later filing that repeats the fact as a comparative column, and says so. Confirming the exact column and line placement is still a manual step: open the filing links from the audit.
+
+`tests/test_periods.py` holds the regression fixtures. Run with `PANOPTICON_OLD_QUARTERS=1` to execute them against the pre-fix implementation loaded from `main`.

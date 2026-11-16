@@ -214,8 +214,8 @@ def ingest(store: Store, client: EdgarClient, ticker: str, since: str,
     # acceptance time. Facts from filings we did not ingest get a conservative end-of-day timestamp.
     facts = client.json(f"{SEC_DATA}/api/xbrl/companyfacts/CIK{cik}.json")
     cutoff = (date.fromisoformat(since) - timedelta(days=fact_lookback_days)).isoformat()
-    accepted_by_acc = {r["accessionNumber"]: _iso_utc(r["acceptanceDateTime"]) for r in
-                       filing_rows(subs, ("10-K", "10-Q", "8-K"), cutoff)}
+    filing_meta = {r["accessionNumber"]: (_iso_utc(r["acceptanceDateTime"]), r["reportDate"] or None) for r in
+                   filing_rows(subs, ("10-K", "10-Q", "8-K"), cutoff)}
     kinds: dict[str, int] = {}
     gaap = facts.get("facts", {}).get("us-gaap", {})
     for concept in XBRL_CONCEPTS:
@@ -223,9 +223,10 @@ def ingest(store: Store, client: EdgarClient, ticker: str, since: str,
             for o in obs:
                 if o["filed"] < cutoff or o.get("form", "").split("/")[0] not in ("10-K", "10-Q"):
                     continue
-                accepted = accepted_by_acc.get(o["accn"]) or f"{o['filed']}T23:59:59Z"
+                accepted, report_period = filing_meta.get(o["accn"], (f"{o['filed']}T23:59:59Z", None))
                 k = store.put_fact(concept, unit, o.get("start"), o["end"], float(o["val"]), o["accn"],
-                                   o.get("form"), o.get("fp"), o.get("fy"), o["filed"], accepted)
+                                   o.get("form"), o.get("fp"), o.get("fy"), o["filed"], accepted,
+                                   frame=o.get("frame"), report_period=report_period)
                 kinds[k] = kinds.get(k, 0) + 1
     store.commit()
     return {"cik": cik, "company": title, "filings_listed": len(rows), "new_documents": new_docs,

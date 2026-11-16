@@ -50,7 +50,9 @@ CREATE TABLE IF NOT EXISTS fact_observations (
     val REAL NOT NULL,
     accession TEXT NOT NULL, form TEXT, fp TEXT, fy INTEGER,
     filed TEXT NOT NULL, accepted_at TEXT NOT NULL,
-    kind TEXT NOT NULL                  -- original | repeat | restatement
+    kind TEXT NOT NULL,                 -- original | repeat | restatement
+    frame TEXT,                         -- SEC calendar frame label, when assigned
+    report_period TEXT                  -- the reporting period of the FILING (not of the fact)
 );
 CREATE INDEX IF NOT EXISTS ix_fact_key ON fact_observations(fact_key, accepted_at);
 
@@ -102,6 +104,10 @@ class Store:
         self.db = sqlite3.connect(self.root / "panopticon.db")
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
+        cols = {r[1] for r in self.db.execute("PRAGMA table_info(fact_observations)")}
+        if "report_period" not in cols:
+            raise RuntimeError(f"{self.root} was built by an older schema; rebuild it "
+                               "(move it aside and re-run `live ingest`) — old data is not migrated")
 
     # ------------------------------------------------------------ raw documents
     def raw_path(self, digest: str) -> Path:
@@ -147,7 +153,8 @@ class Store:
 
     # ------------------------------------------------------------ facts
     def put_fact(self, concept: str, unit: str, start: str | None, end: str, val: float, accession: str,
-                 form: str, fp: str, fy: int, filed: str, accepted_at: str) -> str:
+                 form: str, fp: str, fy: int, filed: str, accepted_at: str, frame: str | None = None,
+                 report_period: str | None = None) -> str:
         """Record one observation; classify as original / repeat / restatement. Idempotent."""
         fact_key = f"{concept}|{unit}|{start or ''}|{end}"
         obs_id = short_hash(fact_key, accession)
@@ -157,9 +164,9 @@ class Store:
             "SELECT val FROM fact_observations WHERE fact_key=? AND accepted_at<? ORDER BY accepted_at DESC LIMIT 1",
             (fact_key, accepted_at)).fetchone()
         kind = "original" if prior is None else ("repeat" if prior["val"] == val else "restatement")
-        self.db.execute("INSERT INTO fact_observations VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        self.db.execute("INSERT INTO fact_observations VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         (obs_id, fact_key, concept, unit, start, end, val, accession, form, fp, fy, filed,
-                         accepted_at, kind))
+                         accepted_at, kind, frame, report_period))
         return kind
 
     def fact_series(self, concept: str, as_of: str | None = None, duration: str | None = None) -> list[dict]:

@@ -9,6 +9,8 @@
   live dossier MU [--as-of TS]             markdown dossier from approved state
   live rel list | live rel verify <edge_id> --by NAME --evidence "10-K FY2026 Item 1A"
   live signals MU                          OptLab packets (empty until edges are verified)
+  live audit MU [--periods ...]            every displayed number with its SEC fact contexts and formulas
+  live source-check MU [--periods ...]     numeric source-presence check (proximity heuristic, not reconciliation)
 
 Data lives in ./data/live (override with PANOPTICON_DATA); it is git-ignored.
 EDGAR contact: EDGAR_CONTACT_NAME and EDGAR_CONTACT_EMAIL environment variables.
@@ -46,6 +48,7 @@ def add_parser(sub) -> None:
     p.add_argument("--forms", default="10-K,10-Q,8-K,4")
     ls.add_parser("status")
     p = ls.add_parser("review")
+    p.add_argument("ticker", nargs="?", help="optional; claims are filtered to this subject")
     p.add_argument("--family")
     p.add_argument("--limit", type=int, default=25)
     p.add_argument("--status", default="pending")
@@ -60,6 +63,16 @@ def add_parser(sub) -> None:
     p = ls.add_parser("dossier")
     p.add_argument("ticker")
     p.add_argument("--as-of", default=None)
+    p = ls.add_parser("audit", help="every displayed number with its SEC fact contexts")
+    p.add_argument("ticker")
+    p.add_argument("--periods", help="comma-separated quarter ends, e.g. 2025-05-29,2026-05-28")
+    p.add_argument("--as-of", default=None)
+    for name in ("source-check", "reconcile"):
+        p = ls.add_parser(name, help="numeric source-presence check with line-item/period-header proximity "
+                                     "(not semantic reconciliation)")
+        p.add_argument("ticker")
+        p.add_argument("--as-of", default=None)
+        p.add_argument("--periods", help="only these quarter ends (comma-separated)")
     p = ls.add_parser("signals")
     p.add_argument("ticker")
     p.add_argument("--as-of", default=None)
@@ -91,7 +104,8 @@ def run(args) -> int:
     elif c == "status":
         out.write(json.dumps(store.stats(), indent=2) + "\n")
     elif c == "review":
-        rows = [r for r in store.claims(status=args.status) if not args.family or r["family"] == args.family]
+        rows = [r for r in store.claims(status=args.status) if (not args.family or r["family"] == args.family)
+                and (not args.ticker or r["subject"] == args.ticker.upper())]
         for r in rows[: args.limit]:
             out.write(f"{r['claim_id']}  {r['family']:<15} {r['event_time'][:10]}  {r['statement'][:150]}\n")
         out.write(f"-- {len(rows)} {args.status} claim(s)" + (f", showing {args.limit}" if len(rows) > args.limit
@@ -120,6 +134,24 @@ def run(args) -> int:
     elif c == "dossier":
         rel = load_relationships(REL_DIR / f"{args.ticker.upper()}.json")
         out.write(live_dossier.render(store, rel, args.ticker.upper(), args.as_of or _now()) + "\n")
+    elif c == "audit":
+        from .audit import render_audit, table_fingerprint
+        out.write(render_audit(store, args.as_of, args.periods.split(",") if args.periods else None) + "\n")
+        out.write(f"\ntable fingerprint: {table_fingerprint(store, args.as_of)}\n")
+    elif c in ("source-check", "reconcile"):
+        from .audit import source_check
+        rows = source_check(store, args.as_of)
+        if args.periods:
+            rows = [r for r in rows if r["quarter_end"] in args.periods.split(",")]
+        for r in rows:
+            out.write(f"{r['level']:<15} {r['metric']:<18} {r['quarter_end']}  {r['concept'][:28]:<28} "
+                      f"{r['value_millions']:>9}M  {r['accession']}  {r['fact']}  | {r['context']}\n")
+        counts = {lv: sum(r["level"] == lv for r in rows) for lv in
+                  ("STATEMENT_LINE_MATCH", "LINE_ITEM_MATCH", "LABEL_ONLY", "NUMBER_ONLY", "MISSING",
+                   "NOT_INGESTED")}
+        out.write(f"-- numeric source-presence check: {counts}. This is a proximity heuristic; statement, column and "
+                  f"line-item placement still require a manual read of each filing.\n")
+        return 1 if counts["MISSING"] else 0
     elif c == "signals":
         rel = load_relationships(REL_DIR / f"{args.ticker.upper()}.json")
         as_of = args.as_of or _now()

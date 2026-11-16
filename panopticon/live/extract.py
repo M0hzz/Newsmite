@@ -18,13 +18,13 @@ import re
 from collections import defaultdict
 from datetime import date
 
+from . import periods
 from .edgar import html_to_text
 from .store import Store, sha256, short_hash
 
 INVENTORY, PRICING_MARGIN, CAPACITY_CAPEX = "INVENTORY", "PRICING_MARGIN", "CAPACITY_CAPEX"
 GEO_REGULATORY, INSIDER, CORPORATE_EVENT = "GEO_REGULATORY", "INSIDER", "CORPORATE_EVENT"
 
-REVENUE_CONCEPTS = ("RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues")
 
 
 def _b(x: float) -> str:
@@ -35,22 +35,33 @@ def _pct(x: float) -> str:
     return f"{x:+.1%}"
 
 
-def _fact_evidence(store: Store, rows: list[dict], note: str = "") -> list[dict]:
-    ev = []
-    for r in rows:
-        doc = store.iter_rows("SELECT doc_id, url FROM documents WHERE accession=? LIMIT 1", (r["accession"],))
-        passage = (f"XBRL us-gaap:{r['concept']} = {r['val']:,.0f} {r['unit']} for "
-                   f"{(r['start'] + ' to ') if r['start'] else ''}{r['end']} (accession {r['accession']}){note}")
-        ev.append({"type": "xbrl_fact", "accession": r["accession"], "concept": r["concept"], "unit": r["unit"],
-                   "start": r["start"], "end": r["end"], "value": r["val"], "form": r["form"],
-                   "accepted_at": r["accepted_at"], "doc_id": doc[0]["doc_id"] if doc else None,
-                   "url": doc[0]["url"] if doc else
-                   f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&accession={r['accession']}",
-                   "passage": passage, "passage_sha256": sha256(passage.encode())})
+def _value_evidence(store: Store, values: list) -> list[dict]:
+    """One evidence entry per SEC fact context used, with how it was combined."""
+    ev, seen = [], set()
+    for v in values:
+        formula = {"direct": "direct quarterly context", "direct+ytd_check": "direct quarterly context "
+                   "(cross-checked against cumulative YTD difference)", "ytd_diff": "derived: later cumulative "
+                   "context minus earlier cumulative context", "instant": "instant balance"}[v.method]
+        for i in v.inputs:
+            if i["obs_id"] in seen:
+                continue
+            seen.add(i["obs_id"])
+            doc = store.iter_rows("SELECT doc_id, url FROM documents WHERE accession=? LIMIT 1", (i["accession"],))
+            passage = (f"XBRL us-gaap:{i['concept']} = {i['val']:,.0f} {i['unit']} for "
+                       f"{(i['start'] + ' to ') if i['start'] else ''}{i['end']} [{i.get('class')}] "
+                       f"(accession {i['accession']}; used as {formula} for {v.concept} {v.end})")
+            ev.append({"type": "xbrl_fact", "obs_id": i["obs_id"], "accession": i["accession"],
+                       "concept": i["concept"], "unit": i["unit"], "start": i["start"], "end": i["end"],
+                       "value": i["val"], "frame": i.get("frame"), "fy": i.get("fy"), "fp": i.get("fp"),
+                       "form": i["form"], "filed": i["filed"], "class": i.get("class"),
+                       "report_period": i.get("report_period"), "accepted_at": i["accepted_at"],
+                       "derivation": {"metric": v.concept, "period_end": v.end, "method": v.method},
+                       "doc_id": doc[0]["doc_id"] if doc else None, "url": doc[0]["url"] if doc else None,
+                       "passage": passage, "passage_sha256": sha256(passage.encode())})
     return ev
 
 
-def _adjacent(prev_end: str, cur_end: str, lo: int = 80, hi: int = 100) -> bool:
+def _adjacent(prev_end: str, cur_end: str, lo: int = 84, hi: int = 100) -> bool:
     return lo <= (date.fromisoformat(cur_end) - date.fromisoformat(prev_end)).days <= hi
 
 
@@ -66,116 +77,79 @@ def _propose(store: Store, c: dict) -> bool:
 
 
 # ---------------------------------------------------------------- quarterly series
-def quarterly(store: Store, concept: str, as_of: str | None = None) -> dict[str, dict]:
-    """end -> {val, start, end, rows}. Uses direct ~90-day facts, else differences of year-to-date facts."""
-    rows = store.fact_series(concept, as_of=as_of, duration="ytd")
-    out: dict[str, dict] = {}
-    for r in rows:
-        if 80 <= r["days"] <= 100:
-            out[r["end"]] = {"val": r["val"], "start": r["start"], "end": r["end"], "rows": [r],
-                             "accepted_at": r["accepted_at"]}
-    by_start: dict[str, list[dict]] = defaultdict(list)
-    for r in rows:
-        by_start[r["start"]].append(r)
-    for start, rs in by_start.items():
-        rs = sorted(rs, key=lambda r: r["end"])
-        for prev, cur in zip(rs, rs[1:]):
-            q_days = (date.fromisoformat(cur["end"]) - date.fromisoformat(prev["end"])).days
-            if cur["end"] in out or not 80 <= q_days <= 100:
-                continue
-            out[cur["end"]] = {"val": cur["val"] - prev["val"], "start": prev["end"], "end": cur["end"],
-                               "rows": [cur, prev], "derived": True,
-                               "accepted_at": max(cur["accepted_at"], prev["accepted_at"])}
-    return dict(sorted(out.items()))
+def _trusted(v) -> bool:
+    return v is not None and v.status == periods.TRUSTED
 
 
-def _revenue(store: Store, as_of: str | None = None) -> dict[str, dict]:
-    for c in REVENUE_CONCEPTS:
-        q = quarterly(store, c, as_of)
-        if q:
-            return q
-    return {}
-
-
-def quarter_days(q: dict) -> int:
-    """Actual length of a fiscal quarter. Direct XBRL quarters have an inclusive start date;
-    derived quarters start at the previous period's end date."""
-    d = (date.fromisoformat(q["end"]) - date.fromisoformat(q["start"])).days
-    return d if q.get("derived") else d + 1
-
-
-def days_of_inventory(inventory: float, cogs_q: dict) -> float:
-    return inventory / cogs_q["val"] * quarter_days(cogs_q)
-
-
-# ---------------------------------------------------------------- families
 def inventory_claims(store: Store, subject: str, as_of: str | None = None) -> int:
-    inv = store.fact_series("InventoryNet", as_of=as_of, duration="instant")
-    cogs = quarterly(store, "CostOfGoodsAndServicesSold", as_of)
+    rows = periods.quarter_table(store, as_of)
+    inv = [r for r in rows if _trusted(r.inventory)]
     n = 0
     for prev, cur in zip(inv, inv[1:]):
-        if not _adjacent(prev["end"], cur["end"]):
+        if not _adjacent(prev.end, cur.end):
             continue  # never compare against a non-adjacent period
-        chg = cur["val"] / prev["val"] - 1
-        stmt = f"Inventory {_b(cur['val'])} at {cur['end']}, {_pct(chg)} vs {prev['end']}"
-        rows = [cur, prev]
-        id_parts = [INVENTORY, subject, cur["end"], cur["val"], prev["val"]]
-        if cur["end"] in cogs and prev["end"] in cogs and cogs[cur["end"]]["val"] > 0:
-            qc, qp = cogs[cur["end"]], cogs[prev["end"]]
-            dio, dio_prev = days_of_inventory(cur["val"], qc), days_of_inventory(prev["val"], qp)
-            stmt += f"; days of inventory {dio:.0f} vs {dio_prev:.0f}"
-            if quarter_days(qc) != 91 or quarter_days(qp) != 91:
-                stmt += f" (quarters of {quarter_days(qc)} and {quarter_days(qp)} days)"
-                id_parts.append(f"dio_days={quarter_days(qc)},{quarter_days(qp)}")  # corrected v0.1 formula
-            rows += qc["rows"] + qp["rows"]
+        a, b = cur.inventory, prev.inventory
+        chg = a.val / b.val - 1
+        stmt = f"Inventory {_b(a.val)} at {cur.end}, {_pct(chg)} vs {prev.end}"
+        used = [a, b]
+        if cur.dio is not None and prev.dio is not None:
+            stmt += f"; days of inventory {cur.dio:.0f} vs {prev.dio:.0f}"
+            if cur.cogs.days != 91 or prev.cogs.days != 91:
+                stmt += f" (quarters of {cur.cogs.days} and {prev.cogs.days} days)"
+            used += [cur.cogs, prev.cogs]
         n += _propose(store, {
-            "claim_id": "cc_" + short_hash(*id_parts),
-            "family": INVENTORY, "subject": subject, "metric": "inventory", "statement": stmt, "change": round(chg, 4),
-            "event_time": cur["end"], "available_at": cur["accepted_at"], "evidence": _fact_evidence(store, rows)})
+            "claim_id": "cc_" + short_hash(INVENTORY, subject, cur.end, a.val, b.val, cur.dio and round(cur.dio)),
+            "family": INVENTORY, "subject": subject, "metric": "inventory", "statement": stmt,
+            "change": round(chg, 4), "event_time": cur.end, "available_at": max(v.available_at for v in used),
+            "evidence": _value_evidence(store, used)})
     return n
 
 
 def margin_claims(store: Store, subject: str, as_of: str | None = None) -> int:
-    rev, gp = _revenue(store, as_of), quarterly(store, "GrossProfit", as_of)
-    ends = [e for e in rev if e in gp and rev[e]["val"] > 0]
+    rows = [r for r in periods.quarter_table(store, as_of) if r.margin_status == periods.TRUSTED]
     n = 0
-    for prev, cur in zip(ends, ends[1:]):
-        if not _adjacent(prev, cur):
+    for prev, cur in zip(rows, rows[1:]):
+        if not _adjacent(prev.end, cur.end):
             continue
-        gm, gm_prev = gp[cur]["val"] / rev[cur]["val"], gp[prev]["val"] / rev[prev]["val"]
-        delta = gm - gm_prev
-        note = " (Q derived from year-to-date difference)" if gp[cur].get("derived") or rev[cur].get("derived") else ""
-        stmt = (f"Gross margin {gm:.1%} in quarter ending {cur} vs {gm_prev:.1%} prior quarter "
-                f"({delta * 1e4:+.0f} bp); revenue {_b(rev[cur]['val'])}{note}")
+        delta = cur.margin - prev.margin
+        derived = any(v.method == "ytd_diff" for v in (cur.revenue, cur.gross_profit))
+        stmt = (f"Gross margin {cur.margin:.1%} in quarter ending {cur.end} vs {prev.margin:.1%} prior quarter "
+                f"({delta * 1e4:+.0f} bp); revenue {_b(cur.revenue.val)}"
+                + (" (quarter derived: fiscal-year total minus nine-month YTD)" if derived else ""))
+        used = [cur.revenue, cur.gross_profit] + ([cur.cogs] if _trusted(cur.cogs) else [])
         n += _propose(store, {
-            "claim_id": "cc_" + short_hash(PRICING_MARGIN, subject, cur, round(gm, 6), round(gm_prev, 6)),
+            "claim_id": "cc_" + short_hash(PRICING_MARGIN, subject, cur.end, round(cur.margin, 6),
+                                           round(prev.margin, 6)),
             "family": PRICING_MARGIN, "subject": subject, "metric": "gross_margin", "statement": stmt,
-            "change": round(delta, 4), "event_time": cur,
-            "available_at": max(gp[cur]["accepted_at"], rev[cur]["accepted_at"]),
-            "evidence": _fact_evidence(store, gp[cur]["rows"] + rev[cur]["rows"], note)})
+            "change": round(delta, 4), "event_time": cur.end,
+            "available_at": max(v.available_at for v in used + [prev.revenue, prev.gross_profit]),
+            "evidence": _value_evidence(store, used + [prev.revenue, prev.gross_profit])})
     return n
 
 
 def capex_claims(store: Store, subject: str, as_of: str | None = None) -> int:
-    cx = quarterly(store, "PaymentsToAcquirePropertyPlantAndEquipment", as_of)
+    cx = {e: v for e, v in periods.quarters(store, "PaymentsToAcquirePropertyPlantAndEquipment", as_of).items()
+          if _trusted(v)}
     ends = list(cx)
     n = 0
     for i in range(1, len(ends)):
         cur, prev = cx[ends[i]], cx[ends[i - 1]]
-        if not _adjacent(prev["end"], cur["end"]):
+        if not _adjacent(prev.end, cur.end) or not prev.val:
             continue
-        chg = cur["val"] / prev["val"] - 1 if prev["val"] else 0.0
-        stmt = f"Capex {_b(cur['val'])} in quarter ending {cur['end']}, {_pct(chg)} QoQ"
-        yago = next((cx[e] for e in ends[:i] if _adjacent(e, cur["end"], 350, 380)), None)
-        if yago and yago["val"]:
-            stmt += f", {_pct(cur['val'] / yago['val'] - 1)} YoY"
-        if cur.get("derived"):
+        chg = cur.val / prev.val - 1
+        stmt = f"Capex {_b(cur.val)} in quarter ending {cur.end}, {_pct(chg)} QoQ"
+        used = [cur, prev]
+        yago = next((cx[e] for e in ends[:i] if _adjacent(e, cur.end, 350, 380)), None)
+        if yago and yago.val:
+            stmt += f", {_pct(cur.val / yago.val - 1)} YoY"
+            used.append(yago)
+        if cur.method == "ytd_diff":
             stmt += " (derived from year-to-date cash-flow figures)"
         n += _propose(store, {
-            "claim_id": "cc_" + short_hash(CAPACITY_CAPEX, subject, cur["end"], cur["val"], prev["val"]),
+            "claim_id": "cc_" + short_hash(CAPACITY_CAPEX, subject, cur.end, cur.val, prev.val),
             "family": CAPACITY_CAPEX, "subject": subject, "metric": "capex", "statement": stmt,
-            "change": round(chg, 4), "event_time": cur["end"], "available_at": cur["accepted_at"],
-            "evidence": _fact_evidence(store, cur["rows"] + prev["rows"])})
+            "change": round(chg, 4), "event_time": cur.end, "available_at": max(v.available_at for v in used),
+            "evidence": _value_evidence(store, used)})
     return n
 
 

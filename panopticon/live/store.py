@@ -252,19 +252,69 @@ class Store:
             raise ValueError(decision)
         if not reviewer:
             raise ValueError("a reviewer name is required")
+        if decision == "approved":
+            row = self.db.execute("SELECT status FROM candidate_claims WHERE claim_id=?", (claim_id,)).fetchone()
+            if row and row["status"] == "superseded":
+                raise ValueError(f"{claim_id} is superseded; approve its replacement instead")
+            newer = self.db.execute("SELECT claim_id FROM candidate_claims WHERE supersedes=? AND status='approved'",
+                                    (claim_id,)).fetchone()
+            if newer:
+                raise ValueError(f"{claim_id} already has an approved replacement {newer['claim_id']}")
         self.db.execute("UPDATE candidate_claims SET status=?, reviewed_by=?, reviewed_at=?, review_note=? "
                         "WHERE claim_id=?", (decision, reviewer, now(), note, claim_id))
         self.db.execute("INSERT INTO claim_history VALUES (?,?,?,?,?)", (claim_id, now(), decision, reviewer, note))
+        if decision == "approved":
+            self._supersede_ancestors(claim_id, reviewer)
         self.db.commit()
+
+    def ancestors(self, claim_id: str) -> list[str]:
+        out, cur, seen = [], claim_id, {claim_id}
+        while True:
+            r = self.db.execute("SELECT supersedes FROM candidate_claims WHERE claim_id=?", (cur,)).fetchone()
+            if not r or not r["supersedes"] or r["supersedes"] in seen:
+                return out
+            cur = r["supersedes"]
+            seen.add(cur)
+            out.append(cur)
+
+    def _supersede_ancestors(self, claim_id: str, reviewer: str) -> int:
+        """Approving a replacement retires every predecessor in its chain (records stay; history is kept)."""
+        n = 0
+        for anc in self.ancestors(claim_id):
+            r = self.db.execute("SELECT status FROM candidate_claims WHERE claim_id=?", (anc,)).fetchone()
+            if r and r["status"] != "superseded":
+                self.db.execute("UPDATE candidate_claims SET status='superseded' WHERE claim_id=?", (anc,))
+                self.db.execute("INSERT INTO claim_history VALUES (?,?,?,?,?)",
+                                (anc, now(), "superseded", "lifecycle",
+                                 f"superseded_by {claim_id} (approved by {reviewer}); prior status {r['status']}"))
+                n += 1
+        return n
+
+    def sync_supersession(self) -> int:
+        """Apply the lifecycle rule to claims approved before it existed. Idempotent."""
+        n = 0
+        for r in self.db.execute("SELECT claim_id, reviewed_by FROM candidate_claims WHERE status='approved'"
+                                 ).fetchall():
+            n += self._supersede_ancestors(r["claim_id"], r["reviewed_by"] or "unknown")
+        self.db.commit()
+        return n
 
     def history(self, claim_id: str) -> list[sqlite3.Row]:
         return self.db.execute("SELECT * FROM claim_history WHERE claim_id=? ORDER BY rowid", (claim_id,)).fetchall()
 
+    def was_approved(self, claim_id: str) -> bool:
+        return self.db.execute("SELECT 1 FROM claim_history WHERE claim_id=? AND action='approved'",
+                               (claim_id,)).fetchone() is not None
+
     def active_claims(self, as_of: str) -> list[dict]:
-        """Approved claims visible at ``as_of`` that no *visible* approved claim supersedes."""
-        approved = self.claims(status="approved", as_of=as_of)
-        superseded = {c["supersedes"] for c in approved if c["supersedes"]}
-        return [c for c in approved if c["claim_id"] not in superseded]
+        """Graph-eligible claims at ``as_of``: approved (now, or before being superseded), visible by ``as_of``,
+        and not replaced by an approved successor that was itself visible by ``as_of``.
+        Point-in-time: a claim later superseded by a restatement stays eligible for replays before the
+        restatement became public. Claims never approved (pending, rejected, legacy) are never eligible."""
+        visible = [c for c in self.claims(as_of=as_of) if c["status"] in ("approved", "superseded")]
+        eligible = [c for c in visible if c["status"] == "approved" or self.was_approved(c["claim_id"])]
+        replaced = {c["supersedes"] for c in eligible if c["supersedes"]}
+        return [c for c in eligible if c["claim_id"] not in replaced]
 
     def commit(self) -> None:
         self.db.commit()

@@ -326,6 +326,55 @@ class ReviewExportTests(unittest.TestCase):
             st.close()
 
 
+class LifecycleTests(unittest.TestCase):
+    def _claim(self, st, cid, avail, supersedes=None, event="2026-09-03"):
+        st.put_candidate({"claim_id": cid, "family": "INVENTORY", "subject": "XMU", "metric": "inventory",
+                          "statement": f"ending-inventory coverage {cid}", "change": 0.1, "event_time": event,
+                          "available_at": avail, "supersedes": supersedes,
+                          "evidence": [{"type": "x", "accepted_at": avail, "passage": "p"}]})
+
+    def test_approving_replacement_supersedes_whole_chain(self):
+        with tempfile.TemporaryDirectory() as d:
+            st = Store(d)
+            self._claim(st, "legacy", "2026-10-09T12:00:00Z")
+            self._claim(st, "v2_typo", "2026-10-09T12:00:00Z", "legacy")
+            self._claim(st, "v2_fixed", "2026-10-09T12:00:00Z", "v2_typo")
+            st.review("legacy", "rejected", "tester")
+            st.review("v2_fixed", "approved", "tester", "verified")
+            status = {c["claim_id"]: c["status"] for c in st.claims()}
+            self.assertEqual(status, {"legacy": "superseded", "v2_typo": "superseded", "v2_fixed": "approved"})
+            self.assertEqual(st.ancestors("v2_fixed"), ["v2_typo", "legacy"])
+            acts = [h["action"] for h in st.history("legacy")]
+            self.assertEqual(acts, ["proposed", "rejected", "superseded"])     # history kept
+            with self.assertRaises(ValueError):
+                st.review("v2_typo", "approved", "tester")                      # cannot resurrect
+            self.assertEqual([c["claim_id"] for c in st.active_claims("2026-12-31T00:00:00Z")], ["v2_fixed"])
+            st.close()
+
+    def test_superseded_claim_stays_eligible_before_successor_was_public(self):
+        with tempfile.TemporaryDirectory() as d:
+            st = Store(d)
+            self._claim(st, "orig", "2026-10-09T12:00:00Z")
+            st.review("orig", "approved", "tester")
+            self._claim(st, "restated", "2026-11-01T12:00:00Z", "orig")
+            st.review("restated", "approved", "tester")
+            self.assertEqual({c["claim_id"]: c["status"] for c in st.claims()},
+                             {"orig": "superseded", "restated": "approved"})
+            ids = lambda t: [c["claim_id"] for c in st.active_claims(t)]  # noqa: E731
+            self.assertEqual(ids("2026-10-15T00:00:00Z"), ["orig"])      # replay before the restatement
+            self.assertEqual(ids("2026-11-05T00:00:00Z"), ["restated"])
+            st.close()
+
+    def test_never_approved_superseded_claim_is_never_eligible(self):
+        with tempfile.TemporaryDirectory() as d:
+            st = Store(d)
+            self._claim(st, "legacy", "2026-10-09T12:00:00Z")
+            self._claim(st, "new", "2026-11-01T12:00:00Z", "legacy")
+            st.review("new", "approved", "tester")
+            self.assertEqual(st.active_claims("2026-10-15T00:00:00Z"), [])
+            st.close()
+
+
 class QuarterLengthTests(unittest.TestCase):
     def test_days_of_inventory_uses_actual_quarter_length(self):
         from panopticon.live.periods import Value
